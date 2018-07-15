@@ -1,0 +1,9 @@
+pipeline:
+  build:
+    image: debian
+    commands:
+      - apt update
+      - apt install -y cmake build-essential libreadline-dev openssl libssl-dev libevent-dev libncurses-dev zlib1g-dev
+      - ./configure
+      - make
+
