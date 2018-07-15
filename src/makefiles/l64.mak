@@ -56,12 +56,12 @@ OBJECTS_MAYAQUA=tmp/objs/Mayaqua/Cfg.o tmp/objs/Mayaqua/Encrypt.o tmp/objs/Mayaq
 
 OBJECTS_CEDAR=tmp/objs/Cedar/Account.o tmp/objs/Cedar/Admin.o tmp/objs/Cedar/AzureClient.o tmp/objs/Cedar/AzureServer.o tmp/objs/Cedar/Bridge.o tmp/objs/Cedar/BridgeUnix.o tmp/objs/Cedar/BridgeWin32.o tmp/objs/Cedar/Cedar.o tmp/objs/Cedar/CedarPch.o tmp/objs/Cedar/Client.o tmp/objs/Cedar/CM.o tmp/objs/Cedar/Command.o tmp/objs/Cedar/Connection.o tmp/objs/Cedar/Console.o tmp/objs/Cedar/Database.o tmp/objs/Cedar/DDNS.o tmp/objs/Cedar/EM.o tmp/objs/Cedar/EtherLog.o tmp/objs/Cedar/Hub.o tmp/objs/Cedar/Interop_OpenVPN.o tmp/objs/Cedar/Interop_SSTP.o tmp/objs/Cedar/IPsec.o tmp/objs/Cedar/IPsec_EtherIP.o tmp/objs/Cedar/IPsec_IKE.o tmp/objs/Cedar/IPsec_IkePacket.o tmp/objs/Cedar/IPsec_IKEv2.o tmp/objs/Cedar/IPsec_Ikev2Packet.o tmp/objs/Cedar/IPsec_IPC.o tmp/objs/Cedar/IPsec_L2TP.o tmp/objs/Cedar/IPsec_PPP.o tmp/objs/Cedar/IPsec_Win7.o tmp/objs/Cedar/Layer3.o tmp/objs/Cedar/Link.o tmp/objs/Cedar/Listener.o tmp/objs/Cedar/Logging.o tmp/objs/Cedar/Nat.o tmp/objs/Cedar/NativeStack.o tmp/objs/Cedar/NM.o tmp/objs/Cedar/NullLan.o tmp/objs/Cedar/Protocol.o tmp/objs/Cedar/Radius.o tmp/objs/Cedar/Remote.o tmp/objs/Cedar/Sam.o tmp/objs/Cedar/SecureInfo.o tmp/objs/Cedar/SecureNAT.o tmp/objs/Cedar/SeLowUser.o tmp/objs/Cedar/Server.o tmp/objs/Cedar/Session.o tmp/objs/Cedar/SM.o tmp/objs/Cedar/SW.o tmp/objs/Cedar/UdpAccel.o tmp/objs/Cedar/UT.o tmp/objs/Cedar/VG.o tmp/objs/Cedar/Virtual.o tmp/objs/Cedar/VLan.o tmp/objs/Cedar/VLanUnix.o tmp/objs/Cedar/VLanWin32.o tmp/objs/Cedar/WaterMark.o tmp/objs/Cedar/WebUI.o tmp/objs/Cedar/WinUi.o tmp/objs/Cedar/Wpc.o
 
+HAMCORE_FILES=src/bin/hamcore/empty_sevpnclient.config src/bin/hamcore/eula.txt src/bin/hamcore/install_src.dat src/bin/hamcore/lang.config src/bin/hamcore/languages.txt src/bin/hamcore/languages_wine.txt src/bin/hamcore/legal.txt src/bin/hamcore/openvpn_readme.pdf src/bin/hamcore/openvpn_readme.txt src/bin/hamcore/openvpn_sample.ovpn src/bin/hamcore/root_certs.dat src/bin/hamcore/SOURCES_OF_BINARY_FILES.TXT src/bin/hamcore/strtable_cn.stb src/bin/hamcore/strtable_en.stb src/bin/hamcore/strtable_ja.stb src/bin/hamcore/vpnweb_sample_cn.htm src/bin/hamcore/vpnweb_sample_en.htm src/bin/hamcore/vpnweb_sample_ja.htm src/bin/hamcore/warning_cn.txt src/bin/hamcore/warning_en.txt src/bin/hamcore/warning_ja.txt src/bin/hamcore/webui/cryptcom.cgi src/bin/hamcore/webui/edituser.cgi src/bin/hamcore/webui/error.cgi src/bin/hamcore/webui/hub.cgi src/bin/hamcore/webui/license.cgi src/bin/hamcore/webui/listener.cgi src/bin/hamcore/webui/localbridge.cgi src/bin/hamcore/webui/login.cgi src/bin/hamcore/webui/newhub.cgi src/bin/hamcore/webui/redirect.cgi src/bin/hamcore/webui/securenat.cgi src/bin/hamcore/webui/server.cgi src/bin/hamcore/webui/session.cgi src/bin/hamcore/webui/user.cgi src/bin/hamcore/webui/webui.css
+
 # Build Action
 default:	build
 
-#build:	$(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR) bin/vpnserver/vpnserver bin/vpnclient/vpnclient bin/vpnbridge/vpnbridge bin/vpncmd/vpncmd
-build:	$(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR) bin/vpnserver/vpnserver bin/vpncmd/vpncmd
-
+build:	$(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR) bin/vpnserver/vpnserver bin/vpnclient/vpnclient bin/vpnbridge/vpnbridge bin/vpncmd/vpncmd
 
 # Mayaqua Kernel Code
 tmp/objs/Mayaqua/Cfg.o: src/Mayaqua/Cfg.c $(HEADERS_MAYAQUA)
@@ -72,8 +72,8 @@ tmp/objs/Mayaqua/Cfg.o: src/Mayaqua/Cfg.c $(HEADERS_MAYAQUA)
 	@mkdir -p tmp/as/
 	@mkdir -p bin/
 	@mkdir -p bin/vpnserver/
-#	@mkdir -p bin/vpnclient/
-#	@mkdir -p bin/vpnbridge/
+	@mkdir -p bin/vpnclient/
+	@mkdir -p bin/vpnbridge/
 	@mkdir -p bin/vpncmd/
 	$(CC) $(OPTIONS_COMPILE) -c src/Mayaqua/Cfg.c -o tmp/objs/Mayaqua/Cfg.o
 
@@ -318,8 +318,18 @@ tmp/objs/Cedar/WinUi.o: src/Cedar/WinUi.c $(HEADERS_MAYAQUA) $(HEADERS_CEDAR)
 tmp/objs/Cedar/Wpc.o: src/Cedar/Wpc.c $(HEADERS_MAYAQUA) $(HEADERS_CEDAR)
 	$(CC) $(OPTIONS_COMPILE) -c src/Cedar/Wpc.c -o tmp/objs/Cedar/Wpc.o
 
+# hamcore.se2 Archive File
+src/bin/BuiltHamcoreFiles/unix/hamcore.se2: tmp/hamcorebuilder $(HAMCORE_FILES)
+	@mkdir -p src/bin/BuiltHamcoreFiles/unix/
+	tmp/hamcorebuilder src/bin/hamcore/ src/bin/BuiltHamcoreFiles/unix/hamcore.se2
+
+# hamcorebuilder Utility
+tmp/hamcorebuilder: src/hamcorebuilder/hamcorebuilder.c $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
+	@mkdir -p tmp/
+	$(CC) $(OPTIONS_COMPILE) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR) src/hamcorebuilder/hamcorebuilder.c $(OPTIONS_LINK) -o tmp/hamcorebuilder
+
 # vpnserver
-bin/vpnserver/vpnserver: tmp/as/vpnserver.a $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
+bin/vpnserver/vpnserver: tmp/as/vpnserver.a bin/vpnserver/hamcore.se2 $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
 	$(CC) tmp/as/vpnserver.a $(OPTIONS_LINK) -o bin/vpnserver/vpnserver
 
 tmp/as/vpnserver.a: tmp/objs/vpnserver.o $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
@@ -327,11 +337,44 @@ tmp/as/vpnserver.a: tmp/objs/vpnserver.o $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(O
 	ar r tmp/as/vpnserver.a $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR) tmp/objs/vpnserver.o
 	ranlib tmp/as/vpnserver.a
 
+bin/vpnserver/hamcore.se2: src/bin/BuiltHamcoreFiles/unix/hamcore.se2
+	cp src/bin/BuiltHamcoreFiles/unix/hamcore.se2 bin/vpnserver/hamcore.se2
+
 tmp/objs/vpnserver.o: src/vpnserver/vpnserver.c $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
 	$(CC) $(OPTIONS_COMPILE) -c src/vpnserver/vpnserver.c -o tmp/objs/vpnserver.o
 
+# vpnclient
+bin/vpnclient/vpnclient: tmp/as/vpnclient.a bin/vpnclient/hamcore.se2 $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
+	$(CC) tmp/as/vpnclient.a $(OPTIONS_LINK) -o bin/vpnclient/vpnclient
+
+tmp/as/vpnclient.a: tmp/objs/vpnclient.o $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
+	rm -f tmp/as/vpnclient.a
+	ar r tmp/as/vpnclient.a $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR) tmp/objs/vpnclient.o
+	ranlib tmp/as/vpnclient.a
+
+bin/vpnclient/hamcore.se2: src/bin/BuiltHamcoreFiles/unix/hamcore.se2
+	cp src/bin/BuiltHamcoreFiles/unix/hamcore.se2 bin/vpnclient/hamcore.se2
+
+tmp/objs/vpnclient.o: src/vpnclient/vpncsvc.c $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
+	$(CC) $(OPTIONS_COMPILE) -c src/vpnclient/vpncsvc.c -o tmp/objs/vpnclient.o
+
+# vpnbridge
+bin/vpnbridge/vpnbridge: tmp/as/vpnbridge.a bin/vpnbridge/hamcore.se2 $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
+	$(CC) tmp/as/vpnbridge.a $(OPTIONS_LINK) -o bin/vpnbridge/vpnbridge
+
+tmp/as/vpnbridge.a: tmp/objs/vpnbridge.o $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
+	rm -f tmp/as/vpnbridge.a
+	ar r tmp/as/vpnbridge.a $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR) tmp/objs/vpnbridge.o
+	ranlib tmp/as/vpnbridge.a
+
+bin/vpnbridge/hamcore.se2: src/bin/BuiltHamcoreFiles/unix/hamcore.se2
+	cp src/bin/BuiltHamcoreFiles/unix/hamcore.se2 bin/vpnbridge/hamcore.se2
+
+tmp/objs/vpnbridge.o: src/vpnbridge/vpnbridge.c $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
+	$(CC) $(OPTIONS_COMPILE) -c src/vpnbridge/vpnbridge.c -o tmp/objs/vpnbridge.o
+
 # vpncmd
-bin/vpncmd/vpncmd: tmp/as/vpncmd.a $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
+bin/vpncmd/vpncmd: tmp/as/vpncmd.a bin/vpncmd/hamcore.se2 $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
 	$(CC) tmp/as/vpncmd.a $(OPTIONS_LINK) -o bin/vpncmd/vpncmd
 
 tmp/as/vpncmd.a: tmp/objs/vpncmd.o $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
@@ -339,76 +382,61 @@ tmp/as/vpncmd.a: tmp/objs/vpncmd.o $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS
 	ar r tmp/as/vpncmd.a $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR) tmp/objs/vpncmd.o
 	ranlib tmp/as/vpncmd.a
 
+bin/vpncmd/hamcore.se2: src/bin/BuiltHamcoreFiles/unix/hamcore.se2
+	cp src/bin/BuiltHamcoreFiles/unix/hamcore.se2 bin/vpncmd/hamcore.se2
+
 tmp/objs/vpncmd.o: src/vpncmd/vpncmd.c $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
 	$(CC) $(OPTIONS_COMPILE) -c src/vpncmd/vpncmd.c -o tmp/objs/vpncmd.o
 
-
-# vpnclient
-#bin/vpnclient/vpnclient: tmp/as/vpnclient.a $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
-#	$(CC) tmp/as/vpnclient.a $(OPTIONS_LINK) -o bin/vpnclient/vpnclient
-#
-#tmp/as/vpnclient.a: tmp/objs/vpnclient.o $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
-#	rm -f tmp/as/vpnclient.a
-#	ar r tmp/as/vpnclient.a $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR) tmp/objs/vpnclient.o
-#	ranlib tmp/as/vpnclient.a
-#
-#tmp/objs/vpnclient.o: src/vpnclient/vpncsvc.c $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
-#	$(CC) $(OPTIONS_COMPILE) -c src/vpnclient/vpncsvc.c -o tmp/objs/vpnclient.o
-
-# vpnbridge
-#bin/vpnbridge/vpnbridge: tmp/as/vpnbridge.a $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
-#	$(CC) tmp/as/vpnbridge.a $(OPTIONS_LINK) -o bin/vpnbridge/vpnbridge
-#
-#tmp/as/vpnbridge.a: tmp/objs/vpnbridge.o $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
-#	rm -f tmp/as/vpnbridge.a
-#	ar r tmp/as/vpnbridge.a $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR) tmp/objs/vpnbridge.o
-#	ranlib tmp/as/vpnbridge.a
-#
-#tmp/objs/vpnbridge.o: src/vpnbridge/vpnbridge.c $(HEADERS_MAYAQUA) $(HEADERS_CEDAR) $(OBJECTS_MAYAQUA) $(OBJECTS_CEDAR)
-#	$(CC) $(OPTIONS_COMPILE) -c src/vpnbridge/vpnbridge.c -o tmp/objs/vpnbridge.o
-
 # Install
 install: $(INSTALL_BINDIR)vpnserver $(INSTALL_BINDIR)vpnbridge $(INSTALL_BINDIR)vpnclient $(INSTALL_BINDIR)vpncmd
+	@echo
 	@echo "--------------------------------------------------------------------"
-	@echo "Use debian packages to properly install server. If you want to install from binaries, make it by your own hands."
+	@echo "Installation completed successfully."
+	@echo
+	@echo "Execute 'vpnserver start' to run the SoftEther VPN Server background service."
+	@echo "Execute 'vpnbridge start' to run the SoftEther VPN Bridge background service."
+	@echo "Execute 'vpnclient start' to run the SoftEther VPN Client background service."
+	@echo "Execute 'vpncmd' to run SoftEther VPN Command-Line Utility to configure VPN Server, VPN Bridge or VPN Client."
 	@echo "--------------------------------------------------------------------"
-	@echo 
+	@echo
 
-$(INSTALL_BINDIR)vpnserver: bin/vpnserver/vpnserver
-#	@mkdir -p $(INSTALL_VPNSERVER_DIR)
-#	cp src/hamcorebuilder/hamcore.se2 $(INSTALL_VPNCLIENT_DIR)hamcore.se2
-#	cp bin/vpnserver/vpnserver $(INSTALL_VPNSERVER_DIR)vpnserver
-#	echo "#!/bin/sh" > $(INSTALL_BINDIR)vpnserver
-#	echo $(INSTALL_VPNSERVER_DIR)vpnserver '"$$@"' >> $(INSTALL_BINDIR)vpnserver
-#	echo 'exit $$?' >> $(INSTALL_BINDIR)vpnserver
-#	chmod 755 $(INSTALL_BINDIR)vpnserver
-#
-$(INSTALL_BINDIR)vpnbridge: bin/vpnbridge/vpnbridge
-#	@mkdir -p $(INSTALL_VPNBRIDGE_DIR)
-#	cp src/hamcorebuilder/hamcore.se2 $(INSTALL_VPNCLIENT_DIR)hamcore.se2
-#	cp bin/vpnbridge/vpnbridge $(INSTALL_VPNBRIDGE_DIR)vpnbridge
-#	echo "#!/bin/sh" > $(INSTALL_BINDIR)vpnbridge
-#	echo $(INSTALL_VPNBRIDGE_DIR)vpnbridge '"$$@"' >> $(INSTALL_BINDIR)vpnbridge
-#	echo 'exit $$?' >> $(INSTALL_BINDIR)vpnbridge
-#	chmod 755 $(INSTALL_BINDIR)vpnbridge
+$(INSTALL_BINDIR)vpnserver: bin/vpnserver/hamcore.se2 bin/vpnserver/vpnserver
+	@mkdir -p $(INSTALL_VPNSERVER_DIR)
+	cp bin/vpnserver/hamcore.se2 $(INSTALL_VPNSERVER_DIR)hamcore.se2
+	cp bin/vpnserver/vpnserver $(INSTALL_VPNSERVER_DIR)vpnserver
+	echo "#!/bin/sh" > $(INSTALL_BINDIR)vpnserver
+	echo $(INSTALL_VPNSERVER_DIR)vpnserver '"$$@"' >> $(INSTALL_BINDIR)vpnserver
+	echo 'exit $$?' >> $(INSTALL_BINDIR)vpnserver
+	chmod 755 $(INSTALL_BINDIR)vpnserver
 
-$(INSTALL_BINDIR)vpnclient: bin/vpnclient/vpnclient
-#	@mkdir -p $(INSTALL_VPNCLIENT_DIR)
-#	cp src/hamcorebuilder/hamcore.se2 $(INSTALL_VPNCLIENT_DIR)hamcore.se2
-#	cp bin/vpnclient/vpnclient $(INSTALL_VPNCLIENT_DIR)vpnclient
-#	echo "#!/bin/sh" > $(INSTALL_BINDIR)vpnclient
-#	echo $(INSTALL_VPNCLIENT_DIR)vpnclient '"$$@"' >> $(INSTALL_BINDIR)vpnclient
-#	echo 'exit $$?' >> $(INSTALL_BINDIR)vpnclient
-#	chmod 755 $(INSTALL_BINDIR)vpnclient
+$(INSTALL_BINDIR)vpnbridge: bin/vpnbridge/hamcore.se2 bin/vpnbridge/vpnbridge
+	@mkdir -p $(INSTALL_VPNBRIDGE_DIR)
+	cp bin/vpnbridge/hamcore.se2 $(INSTALL_VPNBRIDGE_DIR)hamcore.se2
+	cp bin/vpnbridge/vpnbridge $(INSTALL_VPNBRIDGE_DIR)vpnbridge
+	echo "#!/bin/sh" > $(INSTALL_BINDIR)vpnbridge
+	echo $(INSTALL_VPNBRIDGE_DIR)vpnbridge '"$$@"' >> $(INSTALL_BINDIR)vpnbridge
+	echo 'exit $$?' >> $(INSTALL_BINDIR)vpnbridge
+	chmod 755 $(INSTALL_BINDIR)vpnbridge
 
-$(INSTALL_BINDIR)vpncmd: bin/vpncmd/vpncmd
-#	@mkdir -p $(INSTALL_VPNCMD_DIR)
-#	cp src/hamcorebuilder/hamcore.se2 $(INSTALL_VPNCLIENT_DIR)hamcore.se2
-#	cp bin/vpncmd/vpncmd $(INSTALL_VPNCMD_DIR)vpncmd
-#	echo "#!/bin/sh" > $(INSTALL_BINDIR)vpncmd
-#	echo $(INSTALL_VPNCMD_DIR)vpncmd '"$$@"' >> $(INSTALL_BINDIR)vpncmd
-#	echo 'exit $$?' >> $(INSTALL_BINDIR)vpncmd
-#	chmod 755 $(INSTALL_BINDIR)vpncmd
+$(INSTALL_BINDIR)vpnclient: bin/vpnclient/hamcore.se2 bin/vpnclient/vpnclient
+	@mkdir -p $(INSTALL_VPNCLIENT_DIR)
+	cp bin/vpnclient/hamcore.se2 $(INSTALL_VPNCLIENT_DIR)hamcore.se2
+	cp bin/vpnclient/vpnclient $(INSTALL_VPNCLIENT_DIR)vpnclient
+	echo "#!/bin/sh" > $(INSTALL_BINDIR)vpnclient
+	echo $(INSTALL_VPNCLIENT_DIR)vpnclient '"$$@"' >> $(INSTALL_BINDIR)vpnclient
+	echo 'exit $$?' >> $(INSTALL_BINDIR)vpnclient
+	chmod 755 $(INSTALL_BINDIR)vpnclient
+
+$(INSTALL_BINDIR)vpncmd: bin/vpncmd/hamcore.se2 bin/vpncmd/vpncmd
+	@mkdir -p $(INSTALL_VPNCMD_DIR)
+	cp bin/vpncmd/hamcore.se2 $(INSTALL_VPNCMD_DIR)hamcore.se2
+	cp bin/vpncmd/vpncmd $(INSTALL_VPNCMD_DIR)vpncmd
+	chmod 644 $(INSTALL_VPNCMD_DIR)hamcore.se2
+	echo "#!/bin/sh" > $(INSTALL_BINDIR)vpncmd
+	echo $(INSTALL_VPNCMD_DIR)vpncmd '"$$@"' >> $(INSTALL_BINDIR)vpncmd
+	echo 'exit $$?' >> $(INSTALL_BINDIR)vpncmd
+	chmod 755 $(INSTALL_BINDIR)vpncmd
 
 # Clean
 clean:
@@ -423,8 +451,8 @@ clean:
 	-rm -f tmp/as/vpnbridge.a
 	-rm -f tmp/objs/vpncmd.o
 	-rm -f tmp/as/vpncmd.a
-#	-rm -f tmp/hamcorebuilder
-#	-rm -f src/bin/BuiltHamcoreFiles/unix/hamcore.se2
+	-rm -f tmp/hamcorebuilder
+	-rm -f src/bin/BuiltHamcoreFiles/unix/hamcore.se2
 	-rm -rf CMakeFiles/ CMakeCache.txt cmake_install.cmake compile_commands.json
 	-rm -rf usr Makefile.orig
 	-rm -rf debian/{bin,softether-vpnbridge,softether-vpnserver,softether-vpnclient,softether-vpncmd,tmp,files}
@@ -435,3 +463,5 @@ help:
 	@echo "make [DEBUG=YES]"
 	@echo "make install"
 	@echo "make clean"
+
+
