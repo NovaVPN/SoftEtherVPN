@@ -182,7 +182,7 @@ IKEv2_PACKET*
   Ikev2CreatePacket(UINT64 SPIi, UINT64 SPIr, UCHAR exchange_type, bool is_response,
       bool version, bool is_initiator, UINT msgID, LIST* payloads);
 
-IKEv2_PACKET_PAYLOAD* Ikev2CreatePacketPayload(UCHAR type);
+IKEv2_PACKET_PAYLOAD* Ikev2CreatePacketPayload(UCHAR type, UINT sizeofData);
 IKEv2_PACKET_PAYLOAD* Ikev2CreateNotify (USHORT type, BUF* spi, BUF* message, bool contains_child_sa);
 IKEv2_PACKET_PAYLOAD* Ikev2CreateKE(USHORT dh, BUF* buf);
 IKEv2_PACKET_PAYLOAD* Ikev2CreateAuth(USHORT method, BUF* data);

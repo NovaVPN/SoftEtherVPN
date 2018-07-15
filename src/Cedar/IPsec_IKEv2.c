@@ -689,8 +689,8 @@ IKEv2_NOTIFY_PAYLOAD* Ikev2GetNotifyByType(LIST* payloads, USHORT type) {
 	UINT count = LIST_NUM(payloads);
 	for (UINT i = 0; i < count; ++i) {
 		IKEv2_PACKET_PAYLOAD* payload = (IKEv2_PACKET_PAYLOAD*)LIST_DATA(payloads, i);
-		if (payload->PayloadType == IKEv2_NOTIFY_PAYLOAD_T && payload->Payload.Notify.notification_type == type) {
-			return &payload->Payload.Notify;
+		if (payload->PayloadType == IKEv2_NOTIFY_PAYLOAD_T && ((IKEv2_NOTIFY_PAYLOAD*)payload->data)->notification_type == type) {
+			return payload->data;
 		}
 	}
 
@@ -733,9 +733,9 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		return;
 	}
 
-	IKEv2_SA_PAYLOAD* SA = &SAi->Payload.Sa;
-	IKEv2_KE_PAYLOAD* KE = &KEi->Payload.KeyExchange;
-	IKEv2_NONCE_PAYLOAD* nonce_i = &Ni->Payload.Nonce;
+	IKEv2_SA_PAYLOAD* SA = SAi->data;
+	IKEv2_KE_PAYLOAD* KE = KEi->data;
+	IKEv2_NONCE_PAYLOAD* nonce_i = Ni->data;
 
 	IKEv2_CRYPTO_SETTING* setting = (IKEv2_CRYPTO_SETTING*)ZeroMalloc(sizeof(IKEv2_CRYPTO_SETTING));
 	Dbg("choosing best IKESA");
@@ -983,7 +983,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 	IKEv2_PACKET_PAYLOAD* pSKi = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_SK_PAYLOAD_T, 0);
 	if (pSKi != NULL) {
 		Dbg("Found SK payload, OK");
-		IKEv2_SK_PAYLOAD* SKi = &pSKi->Payload.SK;
+		IKEv2_SK_PAYLOAD* SKi = pSKi->data;
 		LIST* payloads = SKi->decrypted_payloads;
 
 		bool is_initial_contact = Ikev2GetNotifyByType(payloads, IKEv2_INITIAL_CONTACT) != NULL;
@@ -1020,14 +1020,14 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 
 				Dbg("EAP found, let's fuck");
 
-				IKEv2_ID_PAYLOAD* IDi = &pIDi->Payload.Id;
+				IKEv2_ID_PAYLOAD* IDi = pIDi->data;
 				Dbg("EAP: IDi type: %u", IDi->ID_type);
 				DbgBuf("EAP: IDi", IDi->data);
-				IKEv2_ID_PAYLOAD* IDr = (pIDr == NULL) ? NULL : &pIDr->Payload.Id;
-				IKEv2_SA_PAYLOAD* SAi = &pSAi->Payload.Sa;
+				IKEv2_ID_PAYLOAD* IDr = (pIDr == NULL) ? NULL : pIDr->data;
+				IKEv2_SA_PAYLOAD* SAi = pSAi->data;
 				// Skip this for now
-				IKEv2_TS_PAYLOAD* TSi = &pTSi->Payload.TS;
-				IKEv2_TS_PAYLOAD* TSr = &pTSr->Payload.TS;
+				IKEv2_TS_PAYLOAD* TSi = pTSi->data;
+				IKEv2_TS_PAYLOAD* TSr = pTSr->data;
 
 				SA->eap_sa = SAi;
 				SA->TSi = TSi;
@@ -1066,7 +1066,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 
 						Dbg("EAP: Creating SK payload with payload count=%u", send_list->num_item);
 						IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(send_list, param);
-						sk->Payload.SK.integ_len = param->setting->integ->out_size;
+						((IKEv2_SK_PAYLOAD*)sk->data)->integ_len = param->setting->integ->out_size;
 						Dbg("EAP: SK payload created!");
 
 						Dbg("EAP: Freeing send_list");
@@ -1105,13 +1105,13 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 			}
 			else {
 				Dbg("Got needed payloads, OK");
-				IKEv2_ID_PAYLOAD* IDi = &pIDi->Payload.Id;
-				IKEv2_ID_PAYLOAD* IDr = (pIDr == NULL) ? NULL : &pIDr->Payload.Id;
-				IKEv2_AUTH_PAYLOAD* AUTHi = &pAUTHi->Payload.Auth;
-				IKEv2_SA_PAYLOAD* SAi = &pSAi->Payload.Sa;
+				IKEv2_ID_PAYLOAD* IDi = pIDi->data;
+				IKEv2_ID_PAYLOAD* IDr = (pIDr == NULL) ? NULL : pIDr->data;
+				IKEv2_AUTH_PAYLOAD* AUTHi = pAUTHi->data;
+				IKEv2_SA_PAYLOAD* SAi = pSAi->data;
 				// Skip this for now
-				IKEv2_TS_PAYLOAD* TSi = &pTSi->Payload.TS;
-				IKEv2_TS_PAYLOAD* TSr = &pTSr->Payload.TS;
+				IKEv2_TS_PAYLOAD* TSi = pTSi->data;
+				IKEv2_TS_PAYLOAD* TSr = pTSr->data;
 
 				BUF* id_data = ikev2_ID_encode(IDi);
 				BUF* auth_i_integ = AUTHi->data;
@@ -1147,7 +1147,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 
 								if (keymat != NULL) {
 									Dbg("Keymat calculated");
-									IKEv2_SA_PAYLOAD* retSA = &pSAr->Payload.Sa;
+									IKEv2_SA_PAYLOAD* retSA = pSAr->data;
 									UINT retSASPI = *(UINT*)(((IKEv2_SA_PROPOSAL*)(LIST_DATA(retSA->proposals, 0)))->SPI->Buf);
 									IKEv2_IPSECSA* ipsec_newSA = Ikev2CreateIPsecSA(retSASPI, SA);
 									Add(ike->ipsec_SAs, ipsec_newSA);
@@ -1163,7 +1163,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 										ip_data = IDr->data;
 									}
 
-									BUF* id_data_r = ikev2_ID_encode(&(pIDr->Payload.Id));
+									BUF* id_data_r = ikev2_ID_encode(pIDr->data);
 									BUF* signed_octets_r = IKEv2ComputeSignedOctets(SA->succ_response, SA->nonce_i, param->setting->prf, param->key_data->sk_pr, param->setting->prf->key_size, id_data_r);
 									FreeBuf(id_data_r);
 									if (signed_octets_r != NULL) {
@@ -1172,7 +1172,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 										if (auth_r_calced != NULL) {
 											Dbg("Auth field calculated, size=%u", auth_r_calced->Size);
 											IKEv2_PACKET_PAYLOAD* auth_r = Ikev2CreateAuth(IKEv2_AUTH_SHARED_KEY_MESSAGE_INTEGRITY_CODE, auth_r_calced);
-                      IKEv2_PACKET_PAYLOAD* cp = Ikev2CreateCP(&peer_cfg->Payload.Config, NULL, IKEv2_CP_CFG_REPLY);
+                      IKEv2_PACKET_PAYLOAD* cp = Ikev2CreateCP(peer_cfg->data, NULL, IKEv2_CP_CFG_REPLY);
 
 											LIST* send_list = NewListFast(NULL);
 											Add(send_list, pIDr);
@@ -1195,7 +1195,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 
 											Dbg("Creating SK payload with payload count=%u", send_list->num_item);
 											IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(send_list, param);
-											sk->Payload.SK.integ_len = param->setting->integ->out_size;
+											((IKEv2_SK_PAYLOAD*)sk->data)->integ_len = param->setting->integ->out_size;
 
 											Dbg("SK payload created!");
 											LIST* sk_list = NewListSingle(sk);
@@ -1352,7 +1352,7 @@ IKEv2_PACKET *Ikev2ParsePacket(IKEv2_PACKET* p, void *data, UINT size, IKEv2_CRY
 				ret = NULL;
 			}
 			else {
-				IKEv2_SK_PAYLOAD* sk = &payload->Payload.SK;
+				IKEv2_SK_PAYLOAD* sk = payload->data;
 				if (Ikev2SetSKFromRawData(sk, cparam) == false) {
 					Dbg("SK init failed");
 					ret = NULL;
@@ -1465,59 +1465,74 @@ IKEv2_PACKET_PAYLOAD* Ikev2DecodePayload(UCHAR payload_type, BUF *buf) {
 		return NULL;
 	}
 
-	IKEv2_PACKET_PAYLOAD* payload = (IKEv2_PACKET_PAYLOAD*)Malloc(sizeof(IKEv2_PACKET_PAYLOAD));
+	IKEv2_PACKET_PAYLOAD* payload = (IKEv2_PACKET_PAYLOAD*)ZeroMalloc(sizeof(IKEv2_PACKET_PAYLOAD));
 	if (payload == NULL) {
 		Dbg("cant allocate mem\n");
 		return NULL;
 	}
 	payload->PayloadType = payload_type;
+	payload->data = NULL;
 	UINT error_type = IKEv2_NO_ERROR;
 
 	Dbg("payload type: 0x%x", payload_type);
 	switch (payload_type) {
 	case IKEv2_SA_PAYLOAD_T:
-		error_type = ikev2_SA_decode(buf, &payload->Payload.Sa);
+		payload->data = ZeroMalloc(sizeof(IKEv2_SA_PAYLOAD));
+		error_type = ikev2_SA_decode(buf, payload->data);
 		break;
 	case IKEv2_KE_PAYLOAD_T:
-		error_type = ikev2_KE_decode(buf, &payload->Payload.KeyExchange);
+		payload->data = ZeroMalloc(sizeof(IKEv2_KE_PAYLOAD));
+		error_type = ikev2_KE_decode(buf, payload->data);
 		break;
 	case IKEv2_IDi_PAYLOAD_T:
 	case IKEv2_IDr_PAYLOAD_T:
-		error_type = ikev2_ID_decode(buf, &payload->Payload.Id);
+		payload->data = ZeroMalloc(sizeof(IKEv2_ID_PAYLOAD));
+		error_type = ikev2_ID_decode(buf, payload->data);
 		break;
 	case IKEv2_CERTIFICATE_PAYLOAD_T:
-		error_type = ikev2_cert_decode(buf, &payload->Payload.Cert);
+		payload->data = ZeroMalloc(sizeof(IKEv2_CERT_PAYLOAD));
+		error_type = ikev2_cert_decode(buf, payload->data);
 		break;
 	case IKEv2_CERTREQ_PAYLOAD_T:
-		error_type = ikev2_cert_req_decode(buf, &payload->Payload.CertRequest);
+		payload->data = ZeroMalloc(sizeof(IKEv2_CERTREQ_PAYLOAD));
+		error_type = ikev2_cert_req_decode(buf, payload->data);
 		break;
 	case IKEv2_AUTH_PAYLOAD_T:
-		error_type = ikev2_auth_decode(buf, &payload->Payload.Auth);
+		payload->data = ZeroMalloc(sizeof(IKEv2_AUTH_PAYLOAD));
+		error_type = ikev2_auth_decode(buf, payload->data);
 		break;
 	case IKEv2_NONCE_PAYLOAD_T:
-		error_type = ikev2_nonce_decode(buf, &payload->Payload.Nonce);
+		payload->data = ZeroMalloc(sizeof(IKEv2_NONCE_PAYLOAD));
+		error_type = ikev2_nonce_decode(buf, payload->data);
 		break;
 	case IKEv2_NOTIFY_PAYLOAD_T:
-		error_type = ikev2_notify_decode(buf, &payload->Payload.Notify);
+		payload->data = ZeroMalloc(sizeof(IKEv2_NOTIFY_PAYLOAD));
+		error_type = ikev2_notify_decode(buf, payload->data);
 		break;
 	case IKEv2_DELETE_PAYLOAD_T:
-		error_type = ikev2_delete_decode(buf, &payload->Payload.Delete);
+		payload->data = ZeroMalloc(sizeof(IKEv2_DELETE_PAYLOAD));
+		error_type = ikev2_delete_decode(buf, payload->data);
 		break;
 	case IKEv2_VENDOR_PAYLOAD_T:
-		error_type = ikev2_vendor_decode(buf, &payload->Payload.Vendor);
+		payload->data = ZeroMalloc(sizeof(IKEv2_VENDOR_PAYLOAD));
+		error_type = ikev2_vendor_decode(buf, payload->data);
 		break;
 	case IKEv2_TSi_PAYLOAD_T:
 	case IKEv2_TSr_PAYLOAD_T:
-		error_type = ikev2_TS_decode(buf, &payload->Payload.TS);
+		payload->data = ZeroMalloc(sizeof(IKEv2_TS_PAYLOAD));
+		error_type = ikev2_TS_decode(buf, payload->data);
 		break;
 	case IKEv2_SK_PAYLOAD_T:
-		error_type = ikev2_SK_decode(buf, &payload->Payload.SK);
+		payload->data = ZeroMalloc(sizeof(IKEv2_SK_PAYLOAD));
+		error_type = ikev2_SK_decode(buf, payload->data);
 		break;
 	case IKEv2_CP_PAYLOAD_T:
-		error_type = ikev2_configuration_decode(buf, &payload->Payload.Config);
+		payload->data = ZeroMalloc(sizeof(IKEv2_CP_PAYLOAD));
+		error_type = ikev2_configuration_decode(buf, payload->data);
 		break;
 	case IKEv2_EAP_PAYLOAD_T:
-		error_type = ikev2_EAP_decode(buf, &payload->Payload.EAP);
+		payload->data = ZeroMalloc(sizeof(IKEv2_EAP_PAYLOAD));
+		error_type = ikev2_EAP_decode(buf, payload->data);
 		break;
 	default:
 		Dbg("Unknown payload: %d", payload_type);
@@ -1529,6 +1544,11 @@ IKEv2_PACKET_PAYLOAD* Ikev2DecodePayload(UCHAR payload_type, BUF *buf) {
 		payload->BitArray = CloneBuf(buf);
 	}
 	else {
+		if (payload != NULL && payload->data != NULL) {
+			Free(payload->data);
+			payload->data = NULL;
+		}
+
 		Free(payload);
 		payload = NULL;
 	}
@@ -1581,61 +1601,61 @@ void Ikev2FreePayload(IKEv2_PACKET_PAYLOAD *p) {
   Dbg("freeing payload type: 0x%x", p->PayloadType);
 	switch (p->PayloadType) {
 	case IKEv2_SA_PAYLOAD_T:
-		ikev2_free_SA_payload(&p->Payload.Sa);
+		ikev2_free_SA_payload(p->data);
 		break;
 
 	case IKEv2_KE_PAYLOAD_T:
-		ikev2_free_KE_payload(&p->Payload.KeyExchange);
+		ikev2_free_KE_payload(p->data);
 		break;
 
 	case IKEv2_IDi_PAYLOAD_T:
 	case IKEv2_IDr_PAYLOAD_T:
-		ikev2_free_ID_payload(&p->Payload.Id);
+		ikev2_free_ID_payload(p->data);
 		break;
 
 	case IKEv2_CERTIFICATE_PAYLOAD_T:
-		ikev2_free_cert_payload(&p->Payload.Cert);
+		ikev2_free_cert_payload(p->data);
 		break;
 
 	case IKEv2_CERTREQ_PAYLOAD_T:
-		ikev2_free_cert_req_payload(&p->Payload.CertRequest);
+		ikev2_free_cert_req_payload(p->data);
 		break;
 
 	case IKEv2_AUTH_PAYLOAD_T:
-		ikev2_free_auth_payload(&p->Payload.Auth);
+		ikev2_free_auth_payload(p->data);
 		break;
 
 	case IKEv2_NONCE_PAYLOAD_T:
-		ikev2_free_nonce_payload(&p->Payload.Nonce);
+		ikev2_free_nonce_payload(p->data);
 		break;
 
 	case IKEv2_NOTIFY_PAYLOAD_T:
-		ikev2_free_notify_payload(&p->Payload.Notify);
+		ikev2_free_notify_payload(p->data);
 		break;
 
 	case IKEv2_DELETE_PAYLOAD_T:
-		ikev2_free_delete_payload(&p->Payload.Delete);
+		ikev2_free_delete_payload(p->data);
 		break;
 
 	case IKEv2_VENDOR_PAYLOAD_T:
-		ikev2_free_vendor_payload(&p->Payload.Vendor);
+		ikev2_free_vendor_payload(p->data);
 		break;
 
 	case IKEv2_TSi_PAYLOAD_T:
 	case IKEv2_TSr_PAYLOAD_T:
-		ikev2_free_TS_payload(&p->Payload.TS);
+		ikev2_free_TS_payload(p->data);
 		break;
 
 	case IKEv2_SK_PAYLOAD_T:
-		ikev2_free_SK_payload(&p->Payload.SK);
+		ikev2_free_SK_payload(p->data);
 		break;
 
 	case IKEv2_CP_PAYLOAD_T:
-		ikev2_free_configuration_payload(&p->Payload.Config);
+		ikev2_free_configuration_payload(p->data);
 		break;
 
 	case IKEv2_EAP_PAYLOAD_T:
-		ikev2_free_EAP_payload(&p->Payload.EAP);
+		ikev2_free_EAP_payload(p->data);
 		break;
 
 	default:
@@ -1787,8 +1807,9 @@ BUF* Ikev2BuildPacket(IKEv2_PACKET *p) {
 	BUF* ret = NewBuf();
 	p->MessageSize = sizeof(h) + pay_list->Size;
 	if (is_sk_last == true) {
-		Dbg("Adding %u bytes to message size due to SK", ((IKEv2_PACKET_PAYLOAD*)LIST_DATA(p->PayloadList, count - 1))->Payload.SK.integ_len);
-		p->MessageSize += ((IKEv2_PACKET_PAYLOAD*)LIST_DATA(p->PayloadList, count - 1))->Payload.SK.integ_len;
+		IKEv2_PACKET_PAYLOAD* packetPayload = ((IKEv2_PACKET_PAYLOAD*)LIST_DATA(p->PayloadList, count - 1));
+		Dbg("Adding %u bytes to message size due to SK", ((IKEv2_SK_PAYLOAD*)packetPayload->data)->integ_len);
+		p->MessageSize += ((IKEv2_SK_PAYLOAD*)packetPayload->data)->integ_len;
 	}
 	h.message_length = Endian32(p->MessageSize);
 	WriteBuf(ret, &h, sizeof(h));
@@ -1817,10 +1838,11 @@ BUF* Ikev2BuildPayloadList(LIST *pay_list) {
 			}
 			else {
 				if (payload->PayloadType == IKEv2_SK_PAYLOAD_T) {
-					LIST* decrypted = payload->Payload.SK.decrypted_payloads;
+					IKEv2_SK_PAYLOAD* sk = payload->data;
+					LIST* decrypted = sk->decrypted_payloads;
 					if (LIST_NUM(decrypted) == 0) {
 						Dbg("Setting SK next_payload to next payload value");
-						header.next_payload = payload->Payload.SK.next_payload;
+						header.next_payload = sk->next_payload;
 					}
 					else {
 						Dbg("Setting SK next_payload to not 0");
@@ -1834,8 +1856,8 @@ BUF* Ikev2BuildPayloadList(LIST *pay_list) {
 
 			UCHAR add = 0;
 			if (payload->PayloadType == IKEv2_SK_PAYLOAD_T) {
-				Dbg("Adding integ checksum padding %u bytes to payload generic header", payload->Payload.SK.integ_len);
-				add = payload->Payload.SK.integ_len;
+				Dbg("Adding integ checksum padding %u bytes to payload generic header", ((IKEv2_SK_PAYLOAD*)payload->data)->integ_len);
+				add = ((IKEv2_SK_PAYLOAD*)payload->data)->integ_len;
 			}
 			header.payload_length = Endian16(sizeof(header) + pay_buf->Size + add);
 
@@ -1860,61 +1882,61 @@ BUF* Ikev2BuildPayload(IKEv2_PACKET_PAYLOAD *p) {
 	BUF* ret = NULL;
 	switch (p->PayloadType) {
 	case IKEv2_SA_PAYLOAD_T:
-		ret = ikev2_SA_encode(&p->Payload.Sa);
+		ret = ikev2_SA_encode(p->data);
 		break;
 
 	case IKEv2_KE_PAYLOAD_T:
-		ret = ikev2_KE_encode(&p->Payload.KeyExchange);
+		ret = ikev2_KE_encode(p->data);
 		break;
 
 	case IKEv2_IDi_PAYLOAD_T:
 	case IKEv2_IDr_PAYLOAD_T:
-		ret = ikev2_ID_encode(&p->Payload.Id);
+		ret = ikev2_ID_encode(p->data);
 		break;
 
 	case IKEv2_CERTIFICATE_PAYLOAD_T:
-		ret = ikev2_cert_encode(&p->Payload.Cert);
+		ret = ikev2_cert_encode(p->data);
 		break;
 
 	case IKEv2_CERTREQ_PAYLOAD_T:
-		ret = ikev2_cert_req_encode(&p->Payload.CertRequest);
+		ret = ikev2_cert_req_encode(p->data);
 		break;
 
 	case IKEv2_AUTH_PAYLOAD_T:
-		ret = ikev2_auth_encode(&p->Payload.Auth);
+		ret = ikev2_auth_encode(p->data);
 		break;
 
 	case IKEv2_NONCE_PAYLOAD_T:
-		ret = ikev2_nonce_encode(&p->Payload.Nonce);
+		ret = ikev2_nonce_encode(p->data);
 		break;
 
 	case IKEv2_NOTIFY_PAYLOAD_T:
-		ret = ikev2_notify_encode(&p->Payload.Notify);
+		ret = ikev2_notify_encode(p->data);
 		break;
 
 	case IKEv2_DELETE_PAYLOAD_T:
-		ret = ikev2_delete_encode(&p->Payload.Delete);
+		ret = ikev2_delete_encode(p->data);
 		break;
 
 	case IKEv2_VENDOR_PAYLOAD_T:
-		ret = ikev2_vendor_encode(&p->Payload.Vendor);
+		ret = ikev2_vendor_encode(p->data);
 		break;
 
 	case IKEv2_TSi_PAYLOAD_T:
 	case IKEv2_TSr_PAYLOAD_T:
-		ret = ikev2_TS_encode(&p->Payload.TS);
+		ret = ikev2_TS_encode(p->data);
 		break;
 
 	case IKEv2_SK_PAYLOAD_T:
-		ret = ikev2_SK_encode(&p->Payload.SK);
+		ret = ikev2_SK_encode(p->data);
 		break;
 
 	case IKEv2_CP_PAYLOAD_T:
-    ret = ikev2_configuration_encode(&p->Payload.Config);
+    ret = ikev2_configuration_encode(p->data);
 		break;
 
 	case IKEv2_EAP_PAYLOAD_T:
-		ret = ikev2_EAP_encode(&p->Payload.EAP);
+		ret = ikev2_EAP_encode(p->data);
 		break;
 
 	default:
@@ -2124,7 +2146,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 	}
 
 	Dbg("Inside choosing best SA");
-	IKEv2_PACKET_PAYLOAD* ret = Ikev2CreatePacketPayload(IKEv2_SA_PAYLOAD_T);
+	IKEv2_PACKET_PAYLOAD* ret = Ikev2CreatePacketPayload(IKEv2_SA_PAYLOAD_T, sizeof(IKEv2_SA_PAYLOAD));
 	if (ret == NULL) {
 		Dbg("failed to allocate mem %d\n", sizeof(IKEv2_PACKET_PAYLOAD));
 		return NULL;
@@ -2133,7 +2155,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 	Dbg("OK, packet payload created");
 	//IKEv2_SA_PAYLOAD* ret_sa = &ret->Payload.Sa;
 	//ret_sa->proposals = NewList(NULL);
-	LIST** ret_props = &(ret->Payload.Sa.proposals);
+	LIST** ret_props = &(((IKEv2_SA_PAYLOAD*)ret->data)->proposals);
 	bool ok = false;
 	UINT prop_count = LIST_NUM(sa->proposals);
 	Dbg("Iterating proposals: %u", prop_count);
@@ -2366,11 +2388,11 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 
 	if (ok == false) {
 		Dbg("SA not chosen");
-		Free(ret);
+		Ikev2FreePayload(ret);
 		return NULL;
 	}
 
-	IKEv2_SA_PAYLOAD* sap = &ret->Payload.Sa;
+	IKEv2_SA_PAYLOAD* sap = ret->data;
 	prop_count = LIST_NUM(sap->proposals);
 	Dbg("Iterating proposals from chosen SA: %u", prop_count);
 	for (UINT i = 0; i < prop_count; ++i) {
@@ -2483,7 +2505,7 @@ IKEv2_PACKET* Ikev2CreatePacket(UINT64 SPIi, UINT64 SPIr, UCHAR exchange_type,
 	return packet;
 }
 
-IKEv2_PACKET_PAYLOAD* Ikev2CreatePacketPayload(UCHAR type) {
+IKEv2_PACKET_PAYLOAD* Ikev2CreatePacketPayload(UCHAR type, UINT sizeofData) {
 	IKEv2_PACKET_PAYLOAD* payload = (IKEv2_PACKET_PAYLOAD*)ZeroMalloc(sizeof(IKEv2_PACKET_PAYLOAD));
 	if (payload == NULL) {
 		return NULL;
@@ -2491,46 +2513,56 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreatePacketPayload(UCHAR type) {
 
 	payload->PayloadType = type;
 	payload->BitArray = NULL;
+	payload->data = ZeroMalloc(sizeofData);
+	if (payload->data == NULL) {
+		Free(payload);
+		return NULL;
+	}
+
 	return payload;
 }
 
 IKEv2_PACKET_PAYLOAD* Ikev2CreateKE(USHORT dh, BUF* buf) {
-	IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_KE_PAYLOAD_T);
+	IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_KE_PAYLOAD_T, sizeof(IKEv2_KE_PAYLOAD));
 	if (payload == NULL) {
 		Debug("%s:%d error: failed to allocate mem %d\n", __func__, __LINE__,
 			sizeof(IKEv2_PACKET_PAYLOAD));
 		return NULL;
 	}
 
-	payload->Payload.KeyExchange.DH_transform_ID = dh;
-	payload->Payload.KeyExchange.key_data = CloneBuf(buf);
+	IKEv2_KE_PAYLOAD* KE = (IKEv2_KE_PAYLOAD*)payload->data;
+	KE->DH_transform_ID = dh;
+	KE->key_data = CloneBuf(buf);
 
 	return payload;
 }
 
 IKEv2_PACKET_PAYLOAD* Ikev2CreateAuth(USHORT method, BUF* data) {
-	IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_AUTH_PAYLOAD_T);
+	IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_AUTH_PAYLOAD_T, sizeof(IKEv2_AUTH_PAYLOAD));
 	if (payload == NULL) {
 		Debug("%s:%d error: failed to allocate mem %d\n", __func__, __LINE__,
 			sizeof(IKEv2_PACKET_PAYLOAD));
 		return NULL;
 	}
 
-	payload->Payload.Auth.auth_method = method;
-	payload->Payload.Auth.data = CloneBuf(data);
+	IKEv2_AUTH_PAYLOAD* auth = (IKEv2_AUTH_PAYLOAD*)payload->data;
+	auth->auth_method = method;
+	auth->data = CloneBuf(data);
 
 	return payload;
 }
 
 IKEv2_PACKET_PAYLOAD* Ikev2CreateNonce(BUF* buf) {
-	IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_NONCE_PAYLOAD_T);
+	IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_NONCE_PAYLOAD_T, sizeof(IKEv2_NONCE_PAYLOAD));
 	if (payload == NULL) {
 		Debug("%s:%d error: failed to allocate mem %d\n", __func__, __LINE__,
 			sizeof(IKEv2_PACKET_PAYLOAD));
 		return NULL;
 	}
 
-	payload->Payload.Nonce.nonce = CloneBuf(buf);
+	IKEv2_NONCE_PAYLOAD* nonce = (IKEv2_NONCE_PAYLOAD*)payload->data;
+	nonce->nonce = CloneBuf(buf);
+	
 	return payload;
 }
 
@@ -2549,12 +2581,12 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateSK(LIST* payloads, IKEv2_CRYPTO_PARAM* cparam) 
 		return NULL;
 	}
 
-	IKEv2_PACKET_PAYLOAD* ret = Ikev2CreatePacketPayload(IKEv2_SK_PAYLOAD_T);
+	IKEv2_PACKET_PAYLOAD* ret = Ikev2CreatePacketPayload(IKEv2_SK_PAYLOAD_T, sizeof(IKEv2_SK_PAYLOAD));
 	if (ret == NULL) {
 		return NULL;
 	}
 
-	IKEv2_SK_PAYLOAD* sk = &ret->Payload.SK;
+	IKEv2_SK_PAYLOAD* sk = (IKEv2_SK_PAYLOAD*)ret->data;
 
 	UINT block_size = cparam->setting->encr->block_size;
 	void* IV = Ikev2CreateIV(block_size);
@@ -2606,12 +2638,14 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateID (UCHAR type, BUF* buf, bool is_responder) {
     ptype = IKEv2_IDr_PAYLOAD_T;
   }
 
-  IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(ptype);
+  IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(ptype, sizeof(IKEv2_ID_PAYLOAD));
   if (payload == NULL) {
     Debug("%s:%d error: failed to allocate mem %d\n", __func__, __LINE__,
        sizeof(IKEv2_PACKET_PAYLOAD));
     return NULL;
   }
+
+  IKEv2_ID_PAYLOAD* id = (IKEv2_ID_PAYLOAD*)payload->data;
 
   switch (type) {
     case IKEv2_DH_ID_IPV4_ADDR:
@@ -2621,8 +2655,8 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateID (UCHAR type, BUF* buf, bool is_responder) {
     case IKEv2_DH_ID_DER_ASN1_DN:
     case IKEv2_DH_ID_DER_ASN1_GN:
     case IKEv2_DH_ID_KEY_ID:
-      payload->Payload.Id.ID_type = type;
-      payload->Payload.Id.data = CloneBuf(buf);
+      id->ID_type = type;
+      id->data = CloneBuf(buf);
       break;
     default:
       Ikev2FreePayload(payload);
@@ -2634,7 +2668,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateID (UCHAR type, BUF* buf, bool is_responder) {
 }
 
 IKEv2_PACKET_PAYLOAD* Ikev2CreateNotify (USHORT type, BUF* spi, BUF* message, bool contains_child_sa) {
-	IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_NOTIFY_PAYLOAD_T);
+	IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_NOTIFY_PAYLOAD_T, sizeof(IKEv2_NOTIFY_PAYLOAD));
 	if (payload == NULL) {
 		Dbg("error: can't create payload");
 		return NULL;
@@ -2645,6 +2679,8 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateNotify (USHORT type, BUF* spi, BUF* message, bo
 		// TODO rfc page 100
 	}
 
+	IKEv2_NOTIFY_PAYLOAD* notify = (IKEv2_NOTIFY_PAYLOAD*)payload->data;
+
 	switch (type) {
 		case IKEv2_INVALID_SELECTORS:
 		case IKEv2_REKEY_SA:
@@ -2654,35 +2690,37 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateNotify (USHORT type, BUF* spi, BUF* message, bo
 				Dbg("with such type as %d SPI MUST be provided, got NULL", type);
 				return NULL;
 			}
-			payload->Payload.Notify.protocol_id = 0;
-			payload->Payload.Notify.spi_size = (UCHAR)spi->Size;
-			payload->Payload.Notify.spi = CloneBuf(spi);
+			notify->protocol_id = 0;
+			notify->spi_size = (UCHAR)spi->Size;
+			notify->spi = CloneBuf(spi);
 			break;
 		default:
-			payload->Payload.Notify.protocol_id = 0;
-			payload->Payload.Notify.spi_size = 0;
-			payload->Payload.Notify.spi = NULL;
+			notify->protocol_id = 0;
+			notify->spi_size = 0;
+			notify->spi = NULL;
 	}
 
-	payload->Payload.Notify.notification_type = type;
-	payload->Payload.Notify.message = CloneBuf(message);
+	notify->notification_type = type;
+	notify->message = CloneBuf(message);
 
 	return payload;
 }
 
 IKEv2_PACKET_PAYLOAD* Ikev2CreateCP(IKEv2_CP_PAYLOAD *peer_conf, LIST* attributes, UCHAR cp_type) {
-  IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_CP_PAYLOAD_T);
+  IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_CP_PAYLOAD_T, sizeof(IKEv2_CP_PAYLOAD));
   if (payload == NULL) {
     return NULL;
   }
 
   payload->PayloadType = IKEv2_CP_PAYLOAD_T;
-  payload->Payload.Config.type = cp_type;
+  IKEv2_CP_PAYLOAD* cp = (IKEv2_CP_PAYLOAD*)payload->data;
+
+  cp->type = cp_type;
 
   if (peer_conf != NULL) {
-    payload->Payload.Config.attributes = peer_conf->attributes;
+    cp->attributes = peer_conf->attributes;
   } else {
-    payload->Payload.Config.attributes = attributes;
+    cp->attributes = attributes;
   }
   return payload;
 }
@@ -2730,7 +2768,7 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
   }
 
   Dbg("[informational] found SK payload, OK");
-  IKEv2_SK_PAYLOAD* SKi = &pSKi->Payload.SK;
+  IKEv2_SK_PAYLOAD* SKi = (IKEv2_SK_PAYLOAD*)pSKi->data;
   LIST* payloads = SKi->decrypted_payloads;
   
   /* IKEv2_PACKET_PAYLOAD *notify =Ikev2GetPayloadByType(payloads, IKEv2_NOTIFY_PAYLOAD_T, 0); */
@@ -2740,8 +2778,9 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
     return;
   }
   /* IKEv2_PACKET_PAYLOAD *cp =Ikev2GetPayloadByType(payloads, IKEv2_CP_PAYLOAD_T, 0); */
-  Dbg("[informational] D num_spi: %u spi_list_len %u proto id: %u spi size %u",delete_i->Payload.Delete.num_spi, 
-      LIST_NUM(delete_i->Payload.Delete.spi_list), delete_i->Payload.Delete.protocol_id, delete_i->Payload.Delete.spi_size);
+  IKEv2_DELETE_PAYLOAD* del = (IKEv2_DELETE_PAYLOAD*)delete_i->data;
+  Dbg("[informational] D num_spi: %u spi_list_len %u proto id: %u spi size %u", del->num_spi, 
+      LIST_NUM(del->spi_list), del->protocol_id, del->spi_size);
 
   BUF* valid = NewBuf();
   IKEv2_PACKET_PAYLOAD* notification = Ikev2CreateNotify(IKEv2_NO_ERROR, NULL, valid, false);
@@ -3254,14 +3293,14 @@ void Ikev2SendPacketByAddress(IKEv2_SERVER* s, IP* srcIP, UINT srcPort, IP* dest
 }
 
 IKEv2_PACKET_PAYLOAD* Ikev2CreateEAP(UCHAR code, UCHAR id, UCHAR type, BUF* type_data) {
-	IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_EAP_PAYLOAD_T);
+	IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_EAP_PAYLOAD_T, sizeof(IKEv2_EAP_PAYLOAD));
 	if (payload == NULL) {
 		Dbg("error: failed to allocate mem ");
 		return NULL;
 	}
 
 	USHORT len = 4;
-	IKEv2_EAP_PAYLOAD* m = &payload->Payload.EAP;
+	IKEv2_EAP_PAYLOAD* m = (IKEv2_EAP_PAYLOAD*)payload->data;
 	m->code = code;
 	m->identifier = id;
 	if (m->code == 1 || m->code == 2) {

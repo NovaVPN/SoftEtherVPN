@@ -214,7 +214,7 @@ typedef struct IKEv2_CERT_PAYLOAD {
 // End of CERT Payload
 
 // CERT_REQ Payload
-typedef struct IKEv2_CERT_PAYLOAD IKEv2_CERT_REQ_PAYLOAD;
+typedef struct IKEv2_CERT_PAYLOAD IKEv2_CERTREQ_PAYLOAD;
 // End of CERT_REQ Payload
 
 // AUTH Payload
@@ -378,22 +378,7 @@ typedef struct IKEv2_PACKET_PAYLOAD {
 	UCHAR PayloadType; // Payload type
 	BUF *BitArray; // Bit array
 
-	union {
-		IKEv2_SA_PAYLOAD Sa;				// SA payload
-		IKEv2_KE_PAYLOAD KeyExchange;		// Key exchange payload
-		IKEv2_ID_PAYLOAD Id;				// ID payload
-		IKEv2_CERT_PAYLOAD Cert;			// Certificate payload
-		IKEv2_CERT_REQ_PAYLOAD CertRequest;	// Certificate request payload
-		IKEv2_AUTH_PAYLOAD Auth;			// Auth payload
-		IKEv2_NONCE_PAYLOAD Nonce;			// Nonce payload
-		IKEv2_NOTIFY_PAYLOAD Notify;		// Notification Payload
-		IKEv2_DELETE_PAYLOAD Delete;		// Deletion payload
-		IKEv2_VENDOR_PAYLOAD Vendor;		// VendorID payload
-		IKEv2_TS_PAYLOAD TS;				// Traffic Selector payload
-		IKEv2_SK_PAYLOAD SK;				// Encrypted & Authenticated normal payload
-		IKEv2_CP_PAYLOAD Config;			// Config payload
-		IKEv2_EAP_PAYLOAD EAP;				// Extensible Auth Protocol payload
-	} Payload;
+	void* data;
 } IKEv2_PACKET_PAYLOAD;
 
 typedef struct IKEv2_PACKET {
@@ -415,7 +400,7 @@ BUF* ikev2_SA_encode(IKEv2_SA_PAYLOAD *p);
 BUF* ikev2_KE_encode(IKEv2_KE_PAYLOAD *p);
 BUF* ikev2_ID_encode(IKEv2_ID_PAYLOAD *p);
 BUF* ikev2_cert_encode(IKEv2_CERT_PAYLOAD *p);
-BUF* ikev2_cert_req_encode(IKEv2_CERT_REQ_PAYLOAD *p);
+BUF* ikev2_cert_req_encode(IKEv2_CERTREQ_PAYLOAD *p);
 BUF* ikev2_auth_encode(IKEv2_AUTH_PAYLOAD *p);
 BUF* ikev2_nonce_encode(IKEv2_NONCE_PAYLOAD *p);
 BUF* ikev2_notify_encode(IKEv2_NOTIFY_PAYLOAD *p);
@@ -432,7 +417,7 @@ UINT ikev2_KE_decode(BUF *b, IKEv2_KE_PAYLOAD *p);
 UINT ikev2_ID_decode(BUF* b, IKEv2_ID_PAYLOAD *p);
 UINT ikev2_auth_decode(BUF *b, IKEv2_AUTH_PAYLOAD *auth);
 UINT ikev2_cert_decode(BUF *b, IKEv2_CERT_PAYLOAD *p);
-UINT ikev2_cert_req_decode(BUF *b, IKEv2_CERT_REQ_PAYLOAD *p);
+UINT ikev2_cert_req_decode(BUF *b, IKEv2_CERTREQ_PAYLOAD *p);
 UINT ikev2_nonce_decode(BUF *b, IKEv2_NONCE_PAYLOAD *p);
 UINT ikev2_notify_decode(BUF *b, IKEv2_NOTIFY_PAYLOAD *p);
 UINT ikev2_delete_decode(BUF *b, IKEv2_DELETE_PAYLOAD *p);
@@ -448,7 +433,7 @@ void ikev2_free_KE_payload(IKEv2_KE_PAYLOAD *p);
 void ikev2_free_ID_payload(IKEv2_ID_PAYLOAD *p);
 void ikev2_free_auth_payload(IKEv2_AUTH_PAYLOAD *p);
 void ikev2_free_cert_payload(IKEv2_CERT_PAYLOAD *p);
-void ikev2_free_cert_req_payload(IKEv2_CERT_REQ_PAYLOAD *p);
+void ikev2_free_cert_req_payload(IKEv2_CERTREQ_PAYLOAD *p);
 void ikev2_free_nonce_payload(IKEv2_NONCE_PAYLOAD *p);
 void ikev2_free_notify_payload(IKEv2_NOTIFY_PAYLOAD *p);
 void ikev2_free_delete_payload(IKEv2_DELETE_PAYLOAD *p);

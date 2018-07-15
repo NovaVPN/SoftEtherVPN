@@ -196,7 +196,6 @@ void ikev2_free_SA_transform(IKEv2_SA_TRANSFORM *t) {
 
 	ReleaseList(t->attributes);
 	Free(t);
-	t = NULL;
 }
 
 void ikev2_free_SA_payload(IKEv2_SA_PAYLOAD *p) {
@@ -220,6 +219,7 @@ void ikev2_free_SA_payload(IKEv2_SA_PAYLOAD *p) {
 	}
 
 	ReleaseList(p->proposals);
+	Free(p);
 }
 /*                END SA PAYLOAD                      */
 
@@ -259,6 +259,7 @@ void ikev2_free_KE_payload(IKEv2_KE_PAYLOAD *p) {
 	}
 
 	FreeBuf(p->key_data);
+	Free(p);
 }
 /*                 END KE PAYLOAD                     */
 
@@ -302,6 +303,7 @@ void ikev2_free_ID_payload(IKEv2_ID_PAYLOAD *p) {
 	}
 
 	FreeBuf(p->data);
+	Free(p);
 }
 /*                 END ID PAYLOAD                     */
 
@@ -336,19 +338,20 @@ void ikev2_free_cert_payload(IKEv2_CERT_PAYLOAD* p) {
 		return;
 	}
 	FreeBuf(p->data);
+	Free(p);
 }
 /*               END CERT PAYLOAD                     */
 
 /*                 CERT_REQ PAYLOAD                       */
-BUF* ikev2_cert_req_encode(IKEv2_CERT_REQ_PAYLOAD* p) {
+BUF* ikev2_cert_req_encode(IKEv2_CERTREQ_PAYLOAD* p) {
 	return ikev2_cert_encode((IKEv2_CERT_PAYLOAD*)p);
 }
 
-UINT ikev2_cert_req_decode(BUF* b, IKEv2_CERT_REQ_PAYLOAD *p) {
+UINT ikev2_cert_req_decode(BUF* b, IKEv2_CERTREQ_PAYLOAD *p) {
 	return ikev2_cert_decode(b, p);
 }
 
-void ikev2_free_cert_req_payload(IKEv2_CERT_REQ_PAYLOAD* p) {
+void ikev2_free_cert_req_payload(IKEv2_CERTREQ_PAYLOAD* p) {
 	ikev2_free_cert_payload((IKEv2_CERT_PAYLOAD*)p);
 }
 /*               END CERT_REQ PAYLOAD                     */
@@ -390,6 +393,7 @@ void ikev2_free_auth_payload(IKEv2_AUTH_PAYLOAD *p) {
 	}
 
 	FreeBuf(p->data);
+	Free(p);
 }
 /*                END AUTH PAYLOAD                    */
 
@@ -418,6 +422,7 @@ void ikev2_free_nonce_payload(IKEv2_NONCE_PAYLOAD *p) {
 	}
 
 	FreeBuf(p->nonce);
+	Free(p);
 }
 /*              END NONCE PAYLOAD                     */
 
@@ -503,6 +508,7 @@ void ikev2_free_notify_payload(IKEv2_NOTIFY_PAYLOAD *p) {
 
 	FreeBuf(p->message);
 	FreeBuf(p->spi);
+	Free(p);
 }
 /*            END NOTIFY PAYLOAD                      */
 
@@ -570,6 +576,8 @@ void ikev2_free_delete_payload(IKEv2_DELETE_PAYLOAD* p) {
 		ReleaseList(p->spi_list);
 		p->spi_list = NULL;
 	}
+
+	Free(p);
 }
 /*             END DELETE PAYLOAD                     */
 
@@ -594,6 +602,7 @@ void ikev2_free_vendor_payload(IKEv2_VENDOR_PAYLOAD *p) {
 	}
 
 	FreeBuf(p->VID);
+	Free(p);
 }
 /*                  END VENDOR PAYLOAD                 */
 
@@ -689,6 +698,8 @@ void ikev2_free_TS_payload(IKEv2_TS_PAYLOAD *p) {
 		selector = NULL;
 	}
 	ReleaseList(p->selectors);
+
+	Free(p);
 }
 /*                  END TS PAYLOAD                    */
 
@@ -729,6 +740,8 @@ void ikev2_free_SK_payload(IKEv2_SK_PAYLOAD *p) {
 	FreeBuf(p->encrypted_payloads);
 	FreeBuf(p->padding);
 	FreeBuf(p->integrity_checksum);
+
+	Free(p);
 }
 /*                  END SK PAYLOAD                    */
 
@@ -810,6 +823,8 @@ void ikev2_free_configuration_payload(IKEv2_CP_PAYLOAD *p) {
 	}
 
 	ReleaseList(p->attributes);
+
+	Free(p);
 }
 /*        END CONFIGURATION PAYLOAD                   */
 
@@ -856,6 +871,8 @@ void ikev2_free_EAP_payload(IKEv2_EAP_PAYLOAD *p) {
 	if (p->type_data != NULL) {
 		FreeBuf(p->type_data);
 	}
+
+	Free(p);
 }
 /*                  END EAP PAYLOAD                    */
 
