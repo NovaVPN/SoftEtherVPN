@@ -7,17 +7,13 @@ LDFLAGS := $(shell dpkg-buildflags --get LDFLAGS)
 %:
 	dh $@ 
 
-override_dh_auto_configure: configure_config
-
 override_dh_auto_clean:
 	rm -rf Makefile tmp/objs/Cedar/IPsec_IKEv2.o tmp/objs/Cedar/IPsec_Ikev2Packet.o tmp/objs/Cedar/IPsec.o tmp/objs/vpnclient.o
-	# rm -fr Makefile* usr bin tmp src/bin/BuiltHamcoreFiles
 
 override_dh_auto_install:
-	patch -f < debian/makefile.patch
-	mkdir -p usr/bin
-	make install
+	echo "done"
 
-configure_config:
-	if [ $(shell uname -m) = 'x86_64' ]; then echo -e "1\n2\n" | ./configure; fi
-
+#override_dh_auto_install:
+#	patch -f < debian/makefile.patch
+#	mkdir -p usr/bin
+#	make install

@@ -1,5 +1,5 @@
-softether-vpn (0:4.23.9647) unstable; urgency=low
+se-vpn (0:1.1) unstable; urgency=low
 
-  * Updated release version
+  * debian package building revisisted
 
- -- Quintin Beukes <github.com@last.za.net>  Thu, 14 Dec 2017 13:41:00 +0000
+ -- Artem <>  Sun, 15 Jul 2018 13:41:00 +0000

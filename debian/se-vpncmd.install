@@ -1,0 +1,8 @@
+#!/usr/bin/dh-exec
+
+#debian/bin/vpncmd usr/bin/
+#usr/vpncmd opt/
+
+src/hamcorebuilder/hamcore.se2 => /usr/bin/vpncmd
+bin/vpncmd/vpncmd => /usr/bin/vpncmd
+#bin/vpncmd/vpncmd.config => /etc/vpncmd/vpncmd.config
