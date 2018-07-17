@@ -293,7 +293,7 @@ void ProcessIKEv2PacketRecv(IKEv2_SERVER *ike, UDPPACKET *p) {
 		break;
 
 	case IKEv2_CREATE_CHILD_SA:
-		ProcessIKEv2CreateChildSAExchange(ike, p);
+		ProcessIKEv2CreateChildSAExchange(header, ike, p);
 		break;
 
 	case IKEv2_INFORMATIONAL:
@@ -1006,17 +1006,18 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 		IKEv2_PACKET_PAYLOAD* pTSr = Ikev2GetPayloadByType(payloads, IKEv2_TSr_PAYLOAD_T, 0);
 		Dbg("PSK = %s", ike->ike_server->Secret);
 		if (!(pIDi == NULL || pSAi == NULL || pTSi == NULL || pTSr == NULL)) {
+			//EAP found
 			if (pAUTHi == NULL) {
 				// EAP is temporally disabled with mock
-        Dbg("EAP: disabled");
-        /* LIST* send_list = NewList(NULL); */
-        IKEv2_PACKET_PAYLOAD* mock = Ikev2CreateNotify(IKEv2_AUTHENTICATION_FAILED, NULL, NewBuf(), false);
-        LIST* to_send = NewListSingle(mock);
-        IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, SPIr, IKEv2_AUTH, true, false, false, packet->MessageId, to_send);
-        Dbg("EAP: Sending packet...");
-        Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, param);
-        return;
-        // EAP mock end
+				Dbg("EAP: disabled");
+				/* LIST* send_list = NewList(NULL); */
+				IKEv2_PACKET_PAYLOAD* mock = Ikev2CreateNotify(IKEv2_AUTHENTICATION_FAILED, NULL, NewBuf(), false);
+				LIST* to_send = NewListSingle(mock);
+				IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, SPIr, IKEv2_AUTH, true, false, false, packet->MessageId, to_send);
+				Dbg("EAP: Sending packet...");
+				Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, param);
+				return;
+				// EAP mock end
 
 				Dbg("EAP found, let's fuck");
 
@@ -1172,12 +1173,12 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 										if (auth_r_calced != NULL) {
 											Dbg("Auth field calculated, size=%u", auth_r_calced->Size);
 											IKEv2_PACKET_PAYLOAD* auth_r = Ikev2CreateAuth(IKEv2_AUTH_SHARED_KEY_MESSAGE_INTEGRITY_CODE, auth_r_calced);
-                      IKEv2_PACKET_PAYLOAD* cp = Ikev2CreateCP(peer_cfg->data, NULL, IKEv2_CP_CFG_REPLY);
+											IKEv2_PACKET_PAYLOAD* cp = Ikev2CreateCP(peer_cfg->data, NULL, IKEv2_CP_CFG_REPLY);
 
 											LIST* send_list = NewListFast(NULL);
 											Add(send_list, pIDr);
 											Add(send_list, auth_r);
-                      Add(send_list, cp);
+											Add(send_list, cp);
 											Add(send_list, pSAr);
 											Add(send_list, pTSi);
 											Add(send_list, pTSr);
@@ -1236,7 +1237,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 			if (pIDi == NULL) {
 				Dbg("IDi == NULL");
 			}
-			if (pTSi== NULL) {
+			if (pTSi == NULL) {
 				Dbg("pTSi == NULL");
 			}
 			if (pTSr == NULL) {
@@ -1251,13 +1252,73 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 	Dbg("Free && exit from SA_AUTH");
 }
 
-void ProcessIKEv2CreateChildSAExchange(IKEv2_SERVER *ike, UDPPACKET *p) {
+void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET *p) {
 	if (ike == NULL || p == NULL) {
 		Dbg("Null args in CREATE_CHILD_SA");
 		return;
 	}
 
-	Dbg("CREATE_CHILD_SA");
+	Dbg("Inside CREATE_CHILD_SA");
+
+	UINT64 SPIi = header->SPIi;
+	UINT64 SPIr = header->SPIr;
+
+	Dbg("Got IKE_SA with SPIs: %u, %u", SPIi, SPIr);
+	IKEv2_SA* SA = Ikev2GetSABySPIAndClient(ike, SPIi, SPIr, NULL);
+	if (SA == NULL) {
+		Dbg("SA not found!");
+		return;
+	}
+
+	IKEv2_CRYPTO_PARAM* param = SA->param;
+
+	Dbg("CREATE_CHILD_SA: Parsing full packet");
+	IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, SA->param);
+	if (packet == NULL) {
+		Dbg("Corrupted packet, exiting CREATE_CHILD_SA");
+		return;
+	}
+
+	IKEv2_PACKET_PAYLOAD* pSKi = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_SK_PAYLOAD_T, 0);
+	if (pSKi != NULL) {
+		IKEv2_SK_PAYLOAD* sk = pSKi->data;
+		LIST* payloads = sk->decrypted_payloads;
+
+		IKEv2_PACKET_PAYLOAD* newSA = Ikev2GetPayloadByType(payloads, IKEv2_SA_PAYLOAD_T, 0);
+		IKEv2_PACKET_PAYLOAD* nonce = Ikev2GetPayloadByType(payloads, IKEv2_NONCE_PAYLOAD_T, 0);
+		IKEv2_PACKET_PAYLOAD* newKE = Ikev2GetPayloadByType(payloads, IKEv2_KE_PAYLOAD_T, 0);
+		IKEv2_PACKET_PAYLOAD* TSi = Ikev2GetPayloadByType(payloads, IKEv2_TSi_PAYLOAD_T, 0);
+		IKEv2_PACKET_PAYLOAD* TSr = Ikev2GetPayloadByType(payloads, IKEv2_TSr_PAYLOAD_T, 0);
+
+		bool is_rekey_child = Ikev2GetNotifyByType(payloads, IKEv2_REKEY_SA) != NULL;
+
+		if (newSA == NULL || nonce == NULL) {
+			Dbg("CREATE_CHILD_SA: not found SA or Nonce payloads");
+			goto end;
+		}
+
+		if (TSi != NULL && TSr != NULL) {
+			if (is_rekey_child == true) {
+				Dbg("CREATE_CHILD_SA: rekeying child SA");
+			}
+			else {
+				Dbg("CREATE_CHILD_SA: creating new child SA");
+			}
+		}
+		else if (TSi == NULL && TSr == NULL) {
+			if (newKE == NULL) {
+				Dbg("CREATE_CHILD_SA: while rekeying IKE_SA KE payload is not present");
+				goto end;
+			}
+
+			Dbg("CREATE_CHILD_SA: rekeying IKE_SA started");
+		}
+
+		Dbg("CREATE_CHILD_SA: TSi && TSr are not synchronously present");
+	}
+
+end:
+	Dbg("Exit from CREATE_CHILD_SA");
 }
 
 // Parse the IKEv2 packet header
@@ -2707,22 +2768,21 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateNotify (USHORT type, BUF* spi, BUF* message, bo
 }
 
 IKEv2_PACKET_PAYLOAD* Ikev2CreateCP(IKEv2_CP_PAYLOAD *peer_conf, LIST* attributes, UCHAR cp_type) {
-  IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_CP_PAYLOAD_T, sizeof(IKEv2_CP_PAYLOAD));
-  if (payload == NULL) {
-    return NULL;
-  }
+	IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(IKEv2_CP_PAYLOAD_T, sizeof(IKEv2_CP_PAYLOAD));
+	if (payload == NULL) {
+		return NULL;
+	}
 
-  payload->PayloadType = IKEv2_CP_PAYLOAD_T;
-  IKEv2_CP_PAYLOAD* cp = (IKEv2_CP_PAYLOAD*)payload->data;
+	IKEv2_CP_PAYLOAD* cp = (IKEv2_CP_PAYLOAD*)payload->data;
+	cp->type = cp_type;
 
-  cp->type = cp_type;
-
-  if (peer_conf != NULL) {
-    cp->attributes = peer_conf->attributes;
-  } else {
-    cp->attributes = attributes;
-  }
-  return payload;
+	if (peer_conf != NULL) {
+		cp->attributes = peer_conf->attributes;
+	}
+	else {
+		cp->attributes = attributes;
+	}
+	return payload;
 }
 
 void Ikev2DeleteSAWithInformational() {
