@@ -185,12 +185,9 @@ void Ikev2FreeServer(IKEv2_SERVER* server) {
 	Free(server);
 }
 
-void Ikev2FreeSA(IKEv2_SA* sa) {
-	if (sa == NULL) {
-		return;
-	}
+void Ikev2FreeCryptoParam(IKEv2_CRYPTO_PARAM* param) {
+	IKEv2_CRYPTO_KEY_DATA* key_data = param->key_data;
 
-	IKEv2_CRYPTO_KEY_DATA* key_data = sa->param->key_data;
 	Free(key_data->sk_d);
 	Free(key_data->shared_key);
 	key_data->shared_key = NULL;
@@ -217,7 +214,16 @@ void Ikev2FreeSA(IKEv2_SA* sa) {
 	}
 
 	Free(key_data);
-	Free(sa->param->setting);
+	Free(param->setting);
+	Free(param);
+}
+
+void Ikev2FreeSA(IKEv2_SA* sa) {
+	if (sa == NULL) {
+		return;
+	}
+
+	Ikev2FreeCryptoParam(sa->param);
 
 	if (sa->eap_sa != NULL) {
 		ikev2_free_SA_payload(sa->eap_sa);
@@ -786,6 +792,7 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 	if (dh == NULL) {
 		Dbg("DH_CTX creation failure");
 		Free(setting);
+		Ikev2FreePayload(SAr);
 	}
 	else {
 		UCHAR* shared_key = ZeroMalloc(sizeof(UCHAR) * setting->dh->size); // g ^ ir
@@ -795,7 +802,10 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 			UINT64 SPIr = Ikev2CreateSPI(ike);
 			BUF* nonce_r = Ikev2GenerateNonce(setting->prf->key_size);
 			DbgBuf("Nonce_r", nonce_r);
-			IKEv2_CRYPTO_KEY_DATA* key_data = GenerateKeyingMaterial(setting, nonce_i->nonce, nonce_r, shared_key, setting->dh->size, SPIi, SPIr);
+
+			IKEv2_CRYPTO_KEY_DATA* key_data = 
+				IKEv2GenerateKeymatForIKESA(setting, nonce_i->nonce, nonce_r, shared_key, setting->dh->size, SPIi, SPIr, NULL, 0, true);
+			
 			if (key_data == NULL) {
 				Dbg("Keying material generation failed");
 				Free(setting);
@@ -1256,16 +1266,16 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 	UINT64 SPIr = header->SPIr;
 
 	Dbg("Got IKE_SA with SPIs: %u, %u", SPIi, SPIr);
-	IKEv2_SA* SA = Ikev2GetSABySPIAndClient(ike, SPIi, SPIr, NULL);
-	if (SA == NULL) {
-		Dbg("SA not found!");
+	IKEv2_SA* ikeSA = Ikev2GetSABySPIAndClient(ike, SPIi, SPIr, NULL);
+	if (ikeSA == NULL) {
+		Dbg("IKE_SA not found!");
 		return;
 	}
 
-	IKEv2_CRYPTO_PARAM* param = SA->param;
+	IKEv2_CRYPTO_PARAM* param = ikeSA->param;
 
 	Dbg("CREATE_CHILD_SA: Parsing full packet");
-	IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, SA->param);
+	IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, ikeSA->param);
 	if (packet == NULL) {
 		Dbg("Corrupted packet, exiting CREATE_CHILD_SA");
 		return;
@@ -1276,34 +1286,128 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 		IKEv2_SK_PAYLOAD* sk = pSKi->data;
 		LIST* payloads = sk->decrypted_payloads;
 
-		IKEv2_PACKET_PAYLOAD* newSA = Ikev2GetPayloadByType(payloads, IKEv2_SA_PAYLOAD_T, 0);
-		IKEv2_PACKET_PAYLOAD* nonce = Ikev2GetPayloadByType(payloads, IKEv2_NONCE_PAYLOAD_T, 0);
-		IKEv2_PACKET_PAYLOAD* newKE = Ikev2GetPayloadByType(payloads, IKEv2_KE_PAYLOAD_T, 0);
-		IKEv2_PACKET_PAYLOAD* TSi = Ikev2GetPayloadByType(payloads, IKEv2_TSi_PAYLOAD_T, 0);
-		IKEv2_PACKET_PAYLOAD* TSr = Ikev2GetPayloadByType(payloads, IKEv2_TSr_PAYLOAD_T, 0);
+		IKEv2_PACKET_PAYLOAD* pSA = Ikev2GetPayloadByType(payloads, IKEv2_SA_PAYLOAD_T, 0);
+		IKEv2_PACKET_PAYLOAD* pNonce = Ikev2GetPayloadByType(payloads, IKEv2_NONCE_PAYLOAD_T, 0);
+		IKEv2_PACKET_PAYLOAD* pKE = Ikev2GetPayloadByType(payloads, IKEv2_KE_PAYLOAD_T, 0);
+		IKEv2_PACKET_PAYLOAD* pTSi = Ikev2GetPayloadByType(payloads, IKEv2_TSi_PAYLOAD_T, 0);
+		IKEv2_PACKET_PAYLOAD* pTSr = Ikev2GetPayloadByType(payloads, IKEv2_TSr_PAYLOAD_T, 0);
 
 		bool is_rekey_child = Ikev2GetNotifyByType(payloads, IKEv2_REKEY_SA) != NULL;
 
-		if (newSA == NULL || nonce == NULL) {
+		if (pSA == NULL || pNonce == NULL) {
 			Dbg("CREATE_CHILD_SA: not found SA or Nonce payloads");
 			goto end;
 		}
 
-		if (TSi != NULL && TSr != NULL) {
+		IKEv2_SA_PAYLOAD* SA = pSA->data;
+		IKEv2_NONCE_PAYLOAD* nonce = pNonce->data;
+		IKEv2_KE_PAYLOAD* KE = (pKE == NULL) ? NULL : pKE->data;
+
+		if (pTSi != NULL && pTSr != NULL) {
 			if (is_rekey_child == true) {
 				Dbg("CREATE_CHILD_SA: rekeying child SA");
+				//TODO
 			}
 			else {
 				Dbg("CREATE_CHILD_SA: creating new child SA");
+				//TODO
 			}
 		}
-		else if (TSi == NULL && TSr == NULL) {
-			if (newKE == NULL) {
+		else if (pTSi == NULL && pTSr == NULL) {
+			if (pKE == NULL) {
 				Dbg("CREATE_CHILD_SA: while rekeying IKE_SA KE payload is not present");
 				goto end;
 			}
 
 			Dbg("CREATE_CHILD_SA: rekeying IKE_SA started");
+			IKEv2_CRYPTO_SETTING* newSetting = ZeroMalloc(sizeof(IKEv2_CRYPTO_SETTING));
+			IKEv2_PACKET_PAYLOAD* chosenSA = Ikev2ChooseBestIKESA(ike, SA, newSetting, IKEv2_PROPOSAL_PROTOCOL_IKE);
+			if (chosenSA == NULL) {
+				Dbg("SA is not chosen");
+				Free(newSetting);
+				goto end;
+			}
+
+			if (newSetting->dh->type != KE->DH_transform_ID) {
+				Dbg("DH_transform_ID didn't guessed");
+				Free(newSetting);
+				Ikev2FreePayload(chosenSA);
+				goto end;
+			}
+
+			IKEv2_SA_PAYLOAD* newSA = ((IKEv2_SA_PAYLOAD*)chosenSA->data);
+			Dbg("Creating DH_CTX");
+			DH_CTX* dh = Ikev2CreateDH_CTX(newSetting->dh);
+			if (dh == NULL) {
+				Dbg("DH_CTX creation failure");
+				Free(newSetting);
+				Ikev2FreePayload(chosenSA);
+			}
+			else {
+				UCHAR* shared_key = ZeroMalloc(sizeof(UCHAR) * newSetting->dh->size); // g ^ ir
+				Dbg("key data size: %u", KE->key_data->Size);
+				if (DhCompute(dh, shared_key, KE->key_data->Buf, KE->key_data->Size)) {
+					DbgPointer("Shared key", shared_key, newSetting->dh->size);
+					IKEv2_SA_PROPOSAL* prop = ((IKEv2_SA_PROPOSAL*)LIST_DATA(newSA->proposals, 0));
+					UINT64 newSPIi = *(UINT64*)(prop->SPI->Buf);
+					UINT64 newSPIr = Ikev2CreateSPI(ike);
+					BUF* nonce_r = Ikev2GenerateNonce(newSetting->prf->key_size);
+					DbgBuf("Nonce_r", nonce_r);
+					
+					IKEv2_CRYPTO_KEY_DATA* key_data = 
+						IKEv2GenerateKeymatForIKESA(newSetting, nonce->nonce, nonce_r, shared_key, 
+													newSetting->dh->size, SPIi, SPIr, param->key_data->sk_d, param->key_data->prf_key_size, false);
+					
+					if (key_data == NULL) {
+						Dbg("Keying material generation failed");
+						Free(newSetting);
+						Ikev2FreePayload(chosenSA);
+						IkeDhFreeCtx(dh);
+						Free(shared_key);
+						FreeBuf(nonce_r);
+						goto end;
+					}
+
+					Dbg("continue: key data size: %u", KE->key_data->Size);
+					
+					IKEv2_PACKET_PAYLOAD* KEr = Ikev2CreateKE(newSetting->dh->type, dh->MyPublicKey);
+					IKEv2_PACKET_PAYLOAD* Nr = Ikev2CreateNonce(nonce_r);
+
+					FreeBuf(prop->SPI);
+					prop->SPI = NewBuf();
+					WriteBufInt64(prop->SPI, newSPIr);
+
+					LIST* send_list = NewListFast(NULL);
+					Add(send_list, chosenSA);
+					Add(send_list, KEr);
+					Add(send_list, Nr);
+
+					IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_SA_INIT, true, false, false, packet->MessageId, send_list);
+					Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, ikeSA->param);
+					
+					ikeSA->SPIi = newSPIi;
+					ikeSA->SPIr = newSPIr;
+
+					Ikev2FreeCryptoParam(ikeSA->param);
+
+					ikeSA->param = ZeroMalloc(sizeof(IKEv2_CRYPTO_PARAM));
+					ikeSA->param->key_data = key_data;
+					ikeSA->param->setting = newSetting;
+
+					FreeBuf(nonce_r);
+					Ikev2FreePacket(to_send);
+				}
+				else {
+					Dbg("Dh compute failed");
+					Free(newSetting);
+					Ikev2FreePayload(chosenSA);
+					Free(shared_key);
+				}
+
+				IkeDhFreeCtx(dh);
+			}
+
+			goto end;
 		}
 
 		Dbg("CREATE_CHILD_SA: TSi && TSr are not synchronously present");
@@ -2205,9 +2309,9 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 	}
 
 	Dbg("OK, packet payload created");
-	//IKEv2_SA_PAYLOAD* ret_sa = &ret->Payload.Sa;
-	//ret_sa->proposals = NewList(NULL);
-	LIST** ret_props = &(((IKEv2_SA_PAYLOAD*)ret->data)->proposals);
+	IKEv2_SA_PAYLOAD* ret_sa = ((IKEv2_SA_PAYLOAD*)ret->data);
+	ret_sa->proposals = NewList(NULL);
+	LIST** ret_props = &(ret_sa->proposals);
 	bool ok = false;
 	UINT prop_count = LIST_NUM(sa->proposals);
 	Dbg("Iterating proposals: %u", prop_count);
@@ -2959,14 +3063,132 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 	/* return INFO_ERR_OCCURED; */
 /* } */
 
-IKEv2_CRYPTO_KEY_DATA* GenerateKeyingMaterial(IKEv2_CRYPTO_SETTING* setting, BUF *nonce_i, BUF *nonce_r, 
-											UCHAR *shared_key, UINT key_len, UINT64 SPIi, UINT64 SPIr) {
+bool IKEv2SetKeymatFromSKEYSEED(IKEv2_CRYPTO_KEY_DATA* key_data, IKEv2_CRYPTO_SETTING* setting, void* skeyseed,
+								BUF* nonce_i, BUF* nonce_r, UINT64 SPIi, UINT64 SPIr) {
+
+	UINT nonce_sum_size = nonce_i->Size + nonce_r->Size;
+
+	UCHAR* newText = ZeroMalloc(nonce_sum_size + sizeof(UCHAR) * 16);
+	Copy(newText, nonce_i->Buf, nonce_i->Size);
+	Copy(newText + nonce_i->Size, nonce_r->Buf, nonce_r->Size);
+
+	UINT64 EndianSPIi = Endian64(SPIi);
+	UINT64 EndianSPIr = Endian64(SPIr);
+	Copy(newText + nonce_sum_size, &EndianSPIi, 8);
+	Copy(newText + nonce_sum_size + 8, &EndianSPIr, 8);
+	DbgPointer("PRF+ seed", newText, nonce_sum_size + 16);
+
+	UINT needed_size = 3 * setting->prf->key_size + 2 * key_data->encr_key_size + 2 * key_data->integ_key_size;
+	Dbg("Calc PRF Plus");
+	UCHAR* keying_mat = Ikev2CalcPRFplus(setting->prf, skeyseed, key_data->prf_key_size, newText, nonce_sum_size + 16, needed_size);
+	Free(newText);
+	
+	if (keying_mat == NULL) {
+		Debug("Keymat PRF+ calc failed...\n");
+		return false;
+	}
+
+	DbgPointer("Keying material", keying_mat, needed_size);
+	Dbg("Saving keying mat");
+	key_data->sk_d = keying_mat;
+	DbgPointer("sk_d", key_data->sk_d, key_data->prf_key_size);
+
+	UINT offset = 0;
+	offset += key_data->prf_key_size;
+	key_data->sk_ai = keying_mat + offset;
+	DbgPointer("sk_ai", key_data->sk_ai, key_data->integ_key_size);
+
+	offset += key_data->integ_key_size;
+	key_data->sk_ar = keying_mat + offset;
+	DbgPointer("sk_ar", key_data->sk_ar, key_data->integ_key_size);
+
+	offset += key_data->integ_key_size;
+	key_data->sk_ei = keying_mat + offset;
+	DbgPointer("sk_ei", key_data->sk_ei, key_data->encr_key_size);
+
+	offset += key_data->encr_key_size;
+	key_data->sk_er = keying_mat + offset;
+	DbgPointer("sk_er", key_data->sk_er, key_data->encr_key_size);
+
+	offset += key_data->encr_key_size;
+	key_data->sk_pi = keying_mat + offset;
+	DbgPointer("sk_pi", key_data->sk_pi, key_data->prf_key_size);
+
+	offset += key_data->prf_key_size;
+	key_data->sk_pr = keying_mat + offset;
+	DbgPointer("sk_pr", key_data->sk_pr, key_data->prf_key_size);
+
+	return true;
+}
+
+void* IKEv2GenerateSKEYSEEDInitial(IKEv2_CRYPTO_SETTING* setting, BUF *nonce_i, BUF *nonce_r, UCHAR *shared_key, UINT key_len) {
+	if (setting == NULL || nonce_i == NULL || nonce_r == NULL || shared_key == NULL) {
+		return NULL;
+	}
+
+	UINT nonce_sum_size = nonce_i->Size + nonce_r->Size;
+	if (nonce_sum_size < setting->prf->key_size) {
+		Debug("Nonces are not long enough\n");
+		return NULL;
+	}
+
+	UCHAR* nonce_concat = ZeroMalloc(sizeof(UCHAR) * nonce_sum_size);
+	Copy(nonce_concat, nonce_i->Buf, nonce_i->Size);
+	Copy(nonce_concat + nonce_i->Size, nonce_r->Buf, nonce_r->Size);
+	DbgPointer("Nonce concat", nonce_concat, nonce_sum_size);
+
+	Dbg("Calc PRF");
+	UCHAR* skeyseed = Ikev2CalcPRF(setting->prf, nonce_concat, nonce_sum_size, shared_key, sizeof(UCHAR) * key_len);
+	if (skeyseed == NULL) {
+		Dbg("Error in generating SKEYSEED");
+	}
+	else {
+		DbgPointer("SKEYSEED", skeyseed, setting->prf->key_size);
+	}
+	
+	Free(nonce_concat);
+	return skeyseed;
+}
+
+void* IKEv2GenerateSKEYSEEDRekeyIKESA(IKEv2_CRYPTO_SETTING* setting, UCHAR* sk_d, UINT len_sk_d, 
+									BUF* nonce_i, BUF* nonce_r, UCHAR* shared_key, UINT key_len) {
+	if (setting == NULL || nonce_i == NULL || nonce_r == NULL || shared_key == NULL) {
+		return NULL;
+	}
+
+	UINT key_sum_size = key_len + nonce_i->Size + nonce_r->Size;
+	if (key_sum_size < setting->prf->key_size) {
+		Debug("Nonces are not long enough\n");
+		return NULL;
+	}
+
+	UCHAR* nonce_concat = ZeroMalloc(sizeof(UCHAR) * key_sum_size);
+	Copy(nonce_concat, shared_key, key_len);
+	Copy(nonce_concat + key_len, nonce_i->Buf, nonce_i->Size);
+	Copy(nonce_concat + nonce_i->Size + key_len, nonce_r->Buf, nonce_r->Size);
+	DbgPointer("Nonce concat", nonce_concat, key_sum_size);
+
+	Dbg("Calc PRF");
+	UCHAR* skeyseed = Ikev2CalcPRF(setting->prf, sk_d, len_sk_d, nonce_concat, key_sum_size);
+	if (skeyseed == NULL) {
+		Dbg("Error in generating SKEYSEED");
+	}
+	else {
+		DbgPointer("SKEYSEED", skeyseed, setting->prf->key_size);
+	}
+
+	Free(nonce_concat);
+	return skeyseed;
+}
+
+IKEv2_CRYPTO_KEY_DATA* IKEv2GenerateKeymatForIKESA(IKEv2_CRYPTO_SETTING* setting, BUF *nonce_i, BUF *nonce_r, 
+											UCHAR *shared_key, UINT key_len, UINT64 SPIi, UINT64 SPIr, void* sk_d, UINT len_sk_d, bool isInitial) {
 
 	if (setting == NULL || nonce_i == NULL || nonce_r == NULL || shared_key == NULL) {
 		return NULL;
 	}
 
-	Dbg("generating keying material");
+	Dbg("Generating initial keying material");
 	IKEv2_CRYPTO_KEY_DATA* key_data = ZeroMalloc(sizeof(IKEv2_CRYPTO_KEY_DATA));
 
 	key_data->encr_key_size = setting->key_size;
@@ -2980,78 +3202,21 @@ IKEv2_CRYPTO_KEY_DATA* GenerateKeyingMaterial(IKEv2_CRYPTO_SETTING* setting, BUF
 	key_data->des_key_e = key_data->des_key_d = NULL;
 	key_data->des3_key_e = key_data->des3_key_d = NULL;
 
-	UINT nonce_sum_size = nonce_i->Size + nonce_r->Size;
-	if (nonce_sum_size < setting->prf->key_size) {
-		Debug("Nonces are not long enough\n");
-		Free(key_data);
-		return NULL;
-	}
-
-	UCHAR* nonce_concat = ZeroMalloc(sizeof(UCHAR) * nonce_sum_size);
-	Copy(nonce_concat, nonce_i->Buf, nonce_i->Size);
-	Copy(nonce_concat + nonce_i->Size, nonce_r->Buf, nonce_r->Size);
-	DbgPointer("Nonce concat", nonce_concat, nonce_sum_size);
-
-	Dbg("Calc PRF");
-	UCHAR* skeyseed = Ikev2CalcPRF(setting->prf, nonce_concat, nonce_sum_size, shared_key, sizeof(UCHAR) * key_len);
+	void* skeyseed = (isInitial == true) ? IKEv2GenerateSKEYSEEDInitial(setting, nonce_i, nonce_r, shared_key, key_len) :
+											IKEv2GenerateSKEYSEEDRekeyIKESA(setting, sk_d, len_sk_d, nonce_i, nonce_r, shared_key, key_len);
 	if (skeyseed == NULL) {
-		Dbg("Error in generating keying material");
+		Dbg("Keymat failed, SKEYSEED == NULL");
 		Free(key_data);
-		Free(nonce_concat);
 		return NULL;
 	}
-	DbgPointer("SKEYSEED", skeyseed, setting->prf->key_size);
 
-	UCHAR* newText = ZeroMalloc(nonce_sum_size + sizeof(UCHAR) * 16);
-	Copy(newText, nonce_concat, nonce_sum_size);
-	UINT64 EndianSPIi = Endian64(SPIi);
-	UINT64 EndianSPIr = Endian64(SPIr);
-	Copy(newText + nonce_sum_size, &EndianSPIi, 8);
-	Copy(newText + nonce_sum_size + 8, &EndianSPIr, 8);
-	Free(nonce_concat);
-	DbgPointer("PRF+ seed", newText, nonce_sum_size + 16);
-
-	UINT needed_size = 3 * setting->prf->key_size + 2 * key_data->encr_key_size + 2 * key_data->integ_key_size;
-	Dbg("Calc PRF Plus");
-	UCHAR* keying_mat = Ikev2CalcPRFplus(setting->prf, skeyseed, key_data->prf_key_size, newText, nonce_sum_size + 16, needed_size);
-	DbgPointer("Keying material", keying_mat, needed_size);
-	if (keying_mat == NULL) {
-		Debug("PRF+ calc failed...\n");
+	bool res = IKEv2SetKeymatFromSKEYSEED(key_data, setting, skeyseed, nonce_i, nonce_r, SPIi, SPIr);
+	if (res == false) {
+		Dbg("Keymat is not generated");
 		Free(key_data);
 		key_data = NULL;
 	}
-	else {
-		Dbg("Saving keying mat");
-		key_data->sk_d = keying_mat;
-		DbgPointer("sk_d", key_data->sk_d, key_data->prf_key_size);
 
-		UINT offset = 0;
-		offset += key_data->prf_key_size;
-		key_data->sk_ai = keying_mat + offset;
-		DbgPointer("sk_ai", key_data->sk_ai, key_data->integ_key_size);
-
-		offset += key_data->integ_key_size;
-		key_data->sk_ar = keying_mat + offset;
-		DbgPointer("sk_ar", key_data->sk_ar, key_data->integ_key_size);
-
-		offset += key_data->integ_key_size;
-		key_data->sk_ei = keying_mat + offset;
-		DbgPointer("sk_ei", key_data->sk_ei, key_data->encr_key_size);
-
-		offset += key_data->encr_key_size;
-		key_data->sk_er = keying_mat + offset;
-		DbgPointer("sk_er", key_data->sk_er, key_data->encr_key_size);
-
-		offset += key_data->encr_key_size;
-		key_data->sk_pi = keying_mat + offset;
-		DbgPointer("sk_pi", key_data->sk_pi, key_data->prf_key_size);
-
-		offset += key_data->prf_key_size;
-		key_data->sk_pr = keying_mat + offset;
-		DbgPointer("sk_pr", key_data->sk_pr, key_data->prf_key_size);
-	}
-
-	Free(newText);
 	Free(skeyseed);
 	return key_data;
 }
