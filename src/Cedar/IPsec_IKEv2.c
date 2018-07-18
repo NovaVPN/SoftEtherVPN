@@ -119,7 +119,7 @@ IKEv2_CLIENT* NewIkev2Client(IP* clientIP, UINT clientPort, IP* serverIP, UINT s
 IKEv2_SA* Ikev2CreateSA(UINT64 SPIi, UINT64 SPIr, IKEv2_CRYPTO_SETTING* setting, IKEv2_CRYPTO_KEY_DATA* key_data) {
 	IKEv2_SA* SA = (IKEv2_SA*)ZeroMalloc(sizeof(IKEv2_SA));
 	if (SA == NULL) {
-		Dbg("cant allocate");
+		Dbg("Can't allocate IKEv2_SA");
 		return NULL;
 	}
 
@@ -127,7 +127,7 @@ IKEv2_SA* Ikev2CreateSA(UINT64 SPIi, UINT64 SPIr, IKEv2_CRYPTO_SETTING* setting,
 	SA->SPIr = SPIr;
 	SA->param = (IKEv2_CRYPTO_PARAM*)ZeroMalloc(sizeof(IKEv2_CRYPTO_PARAM));
 	if (SA->param == NULL) {
-		Dbg("cant allocate");
+		Dbg("Can't allocate CRYPTO_PARAM");
 		return NULL;
 	}
 	SA->param->setting = setting;
@@ -738,47 +738,45 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 	IKEv2_NONCE_PAYLOAD* nonce_i = Ni->data;
 
 	IKEv2_CRYPTO_SETTING* setting = (IKEv2_CRYPTO_SETTING*)ZeroMalloc(sizeof(IKEv2_CRYPTO_SETTING));
-	Dbg("choosing best IKESA");
+	Dbg("choosing best parameters for IKE_SA");
 	IKEv2_PACKET_PAYLOAD* SAr = Ikev2ChooseBestIKESA(ike, SA, setting, IKEv2_PROPOSAL_PROTOCOL_IKE);
-	Dbg("IKESA choosen");
-	if (SAr == NULL) {
+	Dbg("IKE_SA choosen");
+	
+	if (SAr == NULL) { // All transforms are incompatible, SA not chosen
 		Dbg("Responder SA cannot be constructed");
 
-		IKEv2_PACKET_PAYLOAD* notification = Ikev2CreateNotify(IKEv2_NO_PROPOSAL_CHOSEN, NULL, NewBuf(), false);
+		BUF* ntfMsg = NewBuf();
+		IKEv2_PACKET_PAYLOAD* notification = Ikev2CreateNotify(IKEv2_NO_PROPOSAL_CHOSEN, NULL, ntfMsg, false);
+		FreeBuf(ntfMsg);
+
 		LIST* to_send = NewListSingle(notification);
 		IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, 0, IKEv2_SA_INIT, true, false, false, packet->MessageId, to_send);
 		Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, NULL);
 
-		/* Ikev2FreePayload(notification); */
-		Dbg("releasing ikev2 payload");
-		/* ReleaseList(to_send); */
-		Dbg("releasing sending list");
 		Ikev2FreePacket(np);
 		Free(setting);
+		
 		Dbg("all freed");
 		return;
 	}
 
+	// Not guessed DH_transform_ID in KE payload
 	if (setting->dh->type != KE->DH_transform_ID) {
 		Dbg("setting->dh->type: %u KE->DH_transform_ID: %u", setting->dh->type, KE->DH_transform_ID);
+		
 		BUF* error = NewBuf();
 		WriteBufShort(error, setting->dh->type);
 		IKEv2_PACKET_PAYLOAD* notification = Ikev2CreateNotify(IKEv2_INVALID_KE_PAYLOAD, NULL, error, false);
+		FreeBuf(error);
+
 		LIST* to_send = NewListSingle(notification);
-		Dbg("Source ADDR: %u.%u.%u.%u:%u", p->SrcIP.addr[0], p->SrcIP.addr[1], p->SrcIP.addr[2], p->SrcIP.addr[3], p->SrcPort);
 		IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, 0, IKEv2_SA_INIT, true, false, false, packet->MessageId, to_send);
 		Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, NULL);
 
-		Dbg("freeing error buffer");
-		FreeBuf(error);
-
-		/* Ikev2FreePayload(notification); */
-		Dbg("releasing ikev2 payload");
-		/* ReleaseList(to_send); */
-		Dbg("releasing sending list");
-		Ikev2FreePacket(np);
 		Free(setting);
 		Ikev2FreePayload(SAr);
+		Ikev2FreePacket(np);
+		
 		Dbg("all freed");
 		return;
 	}
@@ -801,8 +799,10 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 			if (key_data == NULL) {
 				Dbg("Keying material generation failed");
 				Free(setting);
-				Free(shared_key);
 				Ikev2FreePayload(SAr);
+				IkeDhFreeCtx(dh);
+				Free(shared_key);
+				FreeBuf(nonce_r);
 				return;
 			}
 
@@ -832,26 +832,18 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 			Ikev2SendPacket(ike, client, to_send, NULL);
 			newSA->succ_response = CloneBuf(to_send->ByteMsg);
 
-			//Ikev2FreePayload(KEr);
-			//Ikev2FreePayload(Nr);
-			//ReleaseList(send_list);
-			Ikev2FreePacket(to_send);
-			SAr = NULL;
-
 			FreeBuf(nonce_r);
+			Ikev2FreePacket(to_send);
 		}
 		else {
 			Dbg("Dh compute failed");
 			Free(setting);
+			Ikev2FreePayload(SAr);
 			Free(shared_key);
 		}
+
 		IkeDhFreeCtx(dh);
 	}
-
-	if (SAr != NULL) {
-		Ikev2FreePayload(SAr);
-	}
-
 }
 
 BUF* IKEv2ComputeSignedOctets(BUF* message, BUF* nonce, IKEv2_PRF* prf, void* key, UINT key_size, BUF* id) {
@@ -1399,6 +1391,7 @@ IKEv2_PACKET *Ikev2ParsePacket(IKEv2_PACKET* p, void *data, UINT size, IKEv2_CRY
 		Dbg("Payload list is NULL after parsing packet");
 		ret = NULL;
 	}
+
 	// Decrypt only if stage != SA_INIT
 	else if (p->ExchangeType != IKEv2_SA_INIT) {
 		UINT payload_count = LIST_NUM(p->PayloadList);
@@ -1620,7 +1613,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2DecodePayload(UCHAR payload_type, BUF *buf) {
 void Ikev2FreePacket(IKEv2_PACKET *p) {
 	// Validate arguments
 	if (p == NULL) {
-    Dbg("p is null");
+		Dbg("p is null");
 		return;
 	}
 
@@ -1634,7 +1627,6 @@ void Ikev2FreePacket(IKEv2_PACKET *p) {
 	}
 
 	Free(p);
-	p = NULL;
 	Dbg("IKEv2 packet freed");
 }
 
@@ -1729,7 +1721,6 @@ void Ikev2FreePayload(IKEv2_PACKET_PAYLOAD *p) {
 	}
 
 	Free(p);
-	p = NULL;
 }
 
 BUF* Ikev2Encrypt(void* data, UINT size, IKEv2_CRYPTO_PARAM *cparam) {
@@ -2968,22 +2959,21 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 	/* return INFO_ERR_OCCURED; */
 /* } */
 
-IKEv2_CRYPTO_KEY_DATA*
-GenerateKeyingMaterial(IKEv2_CRYPTO_SETTING* setting, BUF *nonce_i, BUF *nonce_r,
-  UCHAR *shared_key, UINT key_len, UINT64 SPIi, UINT64 SPIr) {
+IKEv2_CRYPTO_KEY_DATA* GenerateKeyingMaterial(IKEv2_CRYPTO_SETTING* setting, BUF *nonce_i, BUF *nonce_r, 
+											UCHAR *shared_key, UINT key_len, UINT64 SPIi, UINT64 SPIr) {
 
 	if (setting == NULL || nonce_i == NULL || nonce_r == NULL || shared_key == NULL) {
 		return NULL;
 	}
 
-  Dbg("generating keying material");
+	Dbg("generating keying material");
 	IKEv2_CRYPTO_KEY_DATA* key_data = ZeroMalloc(sizeof(IKEv2_CRYPTO_KEY_DATA));
 
 	key_data->encr_key_size = setting->key_size;
 	key_data->prf_key_size = setting->prf->key_size;
 	key_data->integ_key_size = setting->integ->key_size;
 	key_data->shared_key = shared_key;
-  Dbg("key sizes set");
+	Dbg("key sizes set");
 	key_data->IV = NULL;
 
 	key_data->aes_key_e = key_data->aes_key_d = NULL;
@@ -3012,7 +3002,7 @@ GenerateKeyingMaterial(IKEv2_CRYPTO_SETTING* setting, BUF *nonce_i, BUF *nonce_r
 	}
 	DbgPointer("SKEYSEED", skeyseed, setting->prf->key_size);
 
-	UCHAR* newText = ZeroMalloc(nonce_sum_size +  sizeof(UCHAR) * 16);
+	UCHAR* newText = ZeroMalloc(nonce_sum_size + sizeof(UCHAR) * 16);
 	Copy(newText, nonce_concat, nonce_sum_size);
 	UINT64 EndianSPIi = Endian64(SPIi);
 	UINT64 EndianSPIr = Endian64(SPIr);
@@ -3031,7 +3021,7 @@ GenerateKeyingMaterial(IKEv2_CRYPTO_SETTING* setting, BUF *nonce_i, BUF *nonce_r
 		key_data = NULL;
 	}
 	else {
-        Dbg("Saving keying mat");
+		Dbg("Saving keying mat");
 		key_data->sk_d = keying_mat;
 		DbgPointer("sk_d", key_data->sk_d, key_data->prf_key_size);
 
@@ -3314,7 +3304,7 @@ void Ikev2SendPacketByAddress(IKEv2_SERVER* s, IP* srcIP, UINT srcPort, IP* dest
 	}
 
 	Dbg("Building packet for sending...");
-	BUF* buf = Ikev2BuildPacket(p);
+	BUF* buf = Ikev2BuildPacket(p); // MUST BE NOT FREED
 	if (buf == NULL) {
 		Dbg("Packet is not built");
 		return;
@@ -3344,7 +3334,7 @@ void Ikev2SendPacketByAddress(IKEv2_SERVER* s, IP* srcIP, UINT srcPort, IP* dest
 	UDPPACKET* udp = NewUdpPacket(srcIP, srcPort, destIP, destPort, buf->Buf, buf->Size);
 	if (udp == NULL) {
 		Dbg("UDP packet is NULL");
-    return;
+		return;
 	}
 	udp->Type = IKE_UDP_TYPE_ISAKMP;
 
