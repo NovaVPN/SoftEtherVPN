@@ -26,7 +26,7 @@ Description: Command line utils
 
 Package: se-vpnserver
 Architecture: amd64
-Depends: ${misc:Depends}, ${shlibs:Depends}, softether-vpncmd
+Depends: ${misc:Depends}, ${shlibs:Depends}, se-vpncmd
 Section: net
 Description: VPN Server daemon
  An Open-Source Free Cross-platform Multi-protocol VPN Program, as an academic project from University of Tsukuba.
