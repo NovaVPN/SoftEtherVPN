@@ -1233,7 +1233,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 
 											Dbg("Creating SK payload with payload count=%u", send_list->num_item);
 											IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(send_list, param);
-											((IKEv2_SK_PAYLOAD*)sk->data)->integ_len = param->setting->integ->out_size;
+											//((IKEv2_SK_PAYLOAD*)sk->data)->integ_len = param->setting->integ->out_size;
 
 											Dbg("SK payload created!");
 											LIST* sk_list = NewListSingle(sk);
@@ -2878,6 +2878,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateSK(LIST* payloads, IKEv2_CRYPTO_PARAM* cparam) 
 	sk->integrity_checksum = NULL; // will be calculated afterwards
 	sk->decrypted_payloads = NULL;
 	sk->next_payload = LIST_NUM(payloads) == 0 ? IKEv2_NO_NEXT_PAYLOAD_T : ((IKEv2_PACKET_PAYLOAD*)(LIST_DATA(payloads, 0)))->PayloadType;
+	sk->integ_len = cparam->setting->integ->out_size;
 
 	FreeBuf(pay_buf);
 	Free(src);
@@ -2992,8 +2993,7 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 		return;
 	}
 
-  Dbg("[informational] init");
-	
+	Dbg("[informational] init");
 
 	UINT64 SPIi = header->SPIi;
 	UINT64 SPIr = header->SPIr;
@@ -3005,44 +3005,59 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 		return;
 	}
 
-  IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, SA->param);
-  if (packet == NULL) {
-    Dbg("[informational] can't parse packet");
-    return;
-  }
-  Dbg("[informational] packet parsed");
+	IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, SA->param);
+	if (packet == NULL) {
+		Dbg("[informational] can't parse packet");
+		return;
+	}
+	Dbg("[informational] packet parsed");
 
 	IKEv2_CRYPTO_PARAM* param = SA->param;
 	IKEv2_PACKET_PAYLOAD* pSKi = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_SK_PAYLOAD_T, 0);
 	if (pSKi == NULL) {
-    Dbg("[informational] can't found SK payload");
-    return;
-  }
+		Dbg("[informational] can't found SK payload");
+		return;
+	}
 
-  Dbg("[informational] found SK payload, OK");
-  IKEv2_SK_PAYLOAD* SKi = (IKEv2_SK_PAYLOAD*)pSKi->data;
-  LIST* payloads = SKi->decrypted_payloads;
-  
-  /* IKEv2_PACKET_PAYLOAD *notify =Ikev2GetPayloadByType(payloads, IKEv2_NOTIFY_PAYLOAD_T, 0); */
-  IKEv2_PACKET_PAYLOAD *delete_i =Ikev2GetPayloadByType(payloads, IKEv2_DELETE_PAYLOAD_T, 0);
-  if (delete_i == NULL) {
-    Dbg("delete payload is null");
-    return;
-  }
-  /* IKEv2_PACKET_PAYLOAD *cp =Ikev2GetPayloadByType(payloads, IKEv2_CP_PAYLOAD_T, 0); */
-  IKEv2_DELETE_PAYLOAD* del = (IKEv2_DELETE_PAYLOAD*)delete_i->data;
-  Dbg("[informational] D num_spi: %u spi_list_len %u proto id: %u spi size %u", del->num_spi, 
-      LIST_NUM(del->spi_list), del->protocol_id, del->spi_size);
+	Dbg("[informational] found SK payload, OK");
+	IKEv2_SK_PAYLOAD* SKi = (IKEv2_SK_PAYLOAD*)pSKi->data;
+	LIST* payloads = SKi->decrypted_payloads;
 
-  BUF* valid = NewBuf();
-  IKEv2_PACKET_PAYLOAD* notification = Ikev2CreateNotify(IKEv2_NO_ERROR, NULL, valid, false);
-  LIST* to_send = NewListSingle(notification);
-  IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, 0, IKEv2_INFORMATIONAL, true, false, false, packet->MessageId, to_send);
-  Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, NULL);
+	if (LIST_NUM(payloads) == 0) {
+		Dbg("[Informational] Got alive check, respond we are alive");
 
-  Ikev2FreePayload(delete_i);
-  Dbg("free payload kek");
-  return;
+		LIST* empty = NewListFast(NULL);
+		IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(empty, param);
+		ReleaseList(empty);
+
+		LIST* to_send = NewListSingle(sk);
+		IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, SPIr, IKEv2_INFORMATIONAL, true, false, false, packet->MessageId, to_send);
+		Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, param);
+
+		Ikev2FreePacket(np);
+		return;
+	}
+
+	/* IKEv2_PACKET_PAYLOAD *notify =Ikev2GetPayloadByType(payloads, IKEv2_NOTIFY_PAYLOAD_T, 0); */
+	IKEv2_PACKET_PAYLOAD *delete_i = Ikev2GetPayloadByType(payloads, IKEv2_DELETE_PAYLOAD_T, 0);
+	if (delete_i == NULL) {
+		Dbg("delete payload is null");
+		return;
+	}
+	/* IKEv2_PACKET_PAYLOAD *cp =Ikev2GetPayloadByType(payloads, IKEv2_CP_PAYLOAD_T, 0); */
+	IKEv2_DELETE_PAYLOAD* del = (IKEv2_DELETE_PAYLOAD*)delete_i->data;
+	Dbg("[informational] D num_spi: %u spi_list_len %u proto id: %u spi size %u", del->num_spi,
+		LIST_NUM(del->spi_list), del->protocol_id, del->spi_size);
+
+	BUF* valid = NewBuf();
+	IKEv2_PACKET_PAYLOAD* notification = Ikev2CreateNotify(IKEv2_NO_ERROR, NULL, valid, false);
+	LIST* to_send = NewListSingle(notification);
+	IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, 0, IKEv2_INFORMATIONAL, true, false, false, packet->MessageId, to_send);
+	Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, NULL);
+
+	Ikev2FreePayload(delete_i);
+	Dbg("free payload kek");
+	return;
 
 	/* IKEv2_PACKET_PAYLOAD* notify_p = NULL; */
 	/* int info_code_to_sent = Ikev2ProcessInformatonalPacket(header); */
@@ -3053,7 +3068,7 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 			/* notify_p = Ikev2CreateNotify(IKEv2_NO_ERROR, NULL, NULL, false); */
 			/* break; */
 		/* [> case INFO_ERR_OCCURED: <] */
-      /* [> // TODO change notification <] */
+	  /* [> // TODO change notification <] */
 			/* [> notify_p = Ikev2CreateNotify(IKEv2_NO_ERROR, NULL, NULL, false); <] */
 			/* [> break; <] */
 		/* case INFO_VALID_NOTIFICATION: */
