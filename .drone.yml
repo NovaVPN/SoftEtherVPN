@@ -29,6 +29,7 @@ pipeline:
     script:
       - cd ./ikev2
       - vpnserver stop
+      - rm /etc/debug.txt
       - dpkg --remove se-vpnserver || true
       # - dpkg -i se-vpncmd*.deb
       - dpkg -i se-vpnserver*.deb
