@@ -17,7 +17,7 @@ pipeline:
     username: root
     secrets: [ ssh_key ]
     target: /root/ikev2
-    source: ../se-vpn*.deb
+    source: ../se-vpnserver*.deb
     rm: true
 
   deploy:
@@ -30,7 +30,7 @@ pipeline:
       - cd ./ikev2
       - vpnserver stop
       - dpkg --remove se-vpnserver || true
-      - dpkg -i se-vpncmd*.deb
+      # - dpkg -i se-vpncmd*.deb
       - dpkg -i se-vpnserver*.deb
       - vpnserver start
 
@@ -39,6 +39,7 @@ pipeline:
     token: "689517956:AAGkhF9NDf0Hnn0tpDKkDNtDO8KFPoKi4gw"
     to:
       - 498894
+      - 254755425
     message: >
       {{#success build.status}}
       Build {{build.number}} ({{commit.sha}}) delivered and ready to tests.
