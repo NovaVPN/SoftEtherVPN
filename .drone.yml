@@ -17,7 +17,7 @@ pipeline:
     username: root
     secrets: [ ssh_key ]
     target: /root/ikev2
-    source: ../se-vpnserver*.deb
+    source: ../se-vpn*.deb
     rm: true
 
   deploy:
@@ -30,6 +30,7 @@ pipeline:
       - cd ./ikev2
       - vpnserver stop
       - dpkg --remove se-vpnserver || true
+      - dpkg -i se-vpncmd*.deb
       - dpkg -i se-vpnserver*.deb
       - vpnserver start
 
