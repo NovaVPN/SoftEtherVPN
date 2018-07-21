@@ -1360,6 +1360,7 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 
 			Dbg("Continue rekeying");
 			IKEv2_SA_PAYLOAD* SAr = (IKEv2_SA_PAYLOAD*)(chosenSA->data);
+			Dbg("SAr set");
 			UCHAR* shared_secret = NULL;
 			DH_CTX* dh = NULL;
 			if (KE != NULL) {
@@ -1390,8 +1391,9 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 				}
 			}
 
+			Dbg("Calculating nonce");
 			BUF* nonce_r = Ikev2GenerateNonce(newSetting->prf->key_size);
-			Dbg("Calculatin key_data");
+			Dbg("Calculating key_data");
 			IKEv2_CRYPTO_KEY_DATA* key_data = (shared_secret == NULL) ?
 				IKEv2CreateKeymatWithoutDHForChildSA(newSetting->prf, param->key_data->sk_d, nonce, nonce_r, newSetting->key_size, newSetting->integ->key_size) :
 				IKEv2CreateKeymatWithDHForChildSA(newSetting->prf, param->key_data->sk_d, shared_secret, nonce, nonce_r, newSetting->key_size, newSetting->integ->key_size);
