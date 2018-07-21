@@ -1392,11 +1392,12 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 			}
 
 			Dbg("Calculating nonce");
-			BUF* nonce_r = Ikev2GenerateNonce(newSetting->prf->key_size);
+			IKEv2_PRF* curPrf = (newSetting->prf == NULL) ? param->setting->prf : newSetting->prf;
+			BUF* nonce_r = Ikev2GenerateNonce(curPrf->key_size);
 			Dbg("Calculating key_data");
 			IKEv2_CRYPTO_KEY_DATA* key_data = (shared_secret == NULL) ?
-				IKEv2CreateKeymatWithoutDHForChildSA(newSetting->prf, param->key_data->sk_d, nonce, nonce_r, newSetting->key_size, newSetting->integ->key_size) :
-				IKEv2CreateKeymatWithDHForChildSA(newSetting->prf, param->key_data->sk_d, shared_secret, nonce, nonce_r, newSetting->key_size, newSetting->integ->key_size);
+				IKEv2CreateKeymatWithoutDHForChildSA(curPrf, param->key_data->sk_d, nonce, nonce_r, newSetting->key_size, newSetting->integ->key_size) :
+				IKEv2CreateKeymatWithDHForChildSA(curPrf, param->key_data->sk_d, shared_secret, nonce, nonce_r, newSetting->key_size, newSetting->integ->key_size);
 			if (key_data == NULL) {
 				Dbg("Key_data == NULL");
 				Free(newSetting);
