@@ -1439,6 +1439,7 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 			if (is_rekey_child) {
 				Dbg("Inside rekeying child");
 				UINT childSPI = *(UINT*)(rekeyNotify->spi->Buf);
+				Dbg("Child SPI searching == %u", childSPI);
 
 				IKEv2_IPSECSA* child = NULL;
 				UINT count = LIST_NUM(ike->ipsec_SAs);
