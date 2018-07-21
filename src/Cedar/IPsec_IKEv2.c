@@ -1362,6 +1362,7 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 			UCHAR* shared_secret = NULL;
 			DH_CTX* dh = NULL;
 			if (KE != NULL) {
+				Dbg("KE payload != NULL, calculating new shared_secret");
 				if (newSetting->dh->type != KE->DH_transform_ID) {
 					Dbg("DH_transform_ID didn't guessed");
 					Free(newSetting);
@@ -1376,10 +1377,11 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 					Ikev2FreePayload(chosenSA);
 					goto end;
 				}
-				
+
 				shared_secret = ZeroMalloc(sizeof(UCHAR) * newSetting->dh->size); // g ^ ir
 				Dbg("key data size: %u", KE->key_data->Size);
 				if (!DhCompute(dh, shared_secret, KE->key_data->Buf, KE->key_data->Size)) {
+					Dbg("Dh compute failed");
 					Free(newSetting);
 					Ikev2FreePayload(chosenSA);
 					Free(shared_secret);
@@ -1388,6 +1390,7 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 			}
 
 			BUF* nonce_r = Ikev2GenerateNonce(newSetting->prf->key_size);
+			Dbg("Calculatin key_data");
 			IKEv2_CRYPTO_KEY_DATA* key_data = (shared_secret == NULL) ?
 				IKEv2CreateKeymatWithoutDHForChildSA(newSetting->prf, param->key_data->sk_d, nonce, nonce_r, newSetting->key_size, newSetting->integ->key_size) :
 				IKEv2CreateKeymatWithDHForChildSA(newSetting->prf, param->key_data->sk_d, shared_secret, nonce, nonce_r, newSetting->key_size, newSetting->integ->key_size);
@@ -1405,9 +1408,11 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 				goto end;
 			}
 
+			Dbg("Key_data is not null");
 			IKEv2_PACKET_PAYLOAD* KEr = (KE == NULL) ? NULL : Ikev2CreateKE(newSetting->dh->type, dh->MyPublicKey);
 			IKEv2_PACKET_PAYLOAD* Nr = Ikev2CreateNonce(nonce_r);
-			
+
+			Dbg("Preparing list to send");
 			LIST* send_list = NewListFast(NULL);
 			Add(send_list, chosenSA);
 			if (KEr != NULL) {
@@ -1417,16 +1422,20 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 			Add(send_list, pTSi);
 			Add(send_list, pTSr);
 
+			Dbg("Creating SK");
 			IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(send_list, param);
 			LIST* sk_list = NewListSingle(sk);
 
+			Dbg("Sending packet");
 			IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_CREATE_CHILD_SA, true, false, false, packet->MessageId, sk_list);
 			Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, ikeSA->param);
 
 			UINT newSPI = *(UINT*)(((IKEv2_SA_PROPOSAL*)(LIST_DATA(SAr->proposals, 0)))->SPI->Buf);
+			Dbg("New SPI == %u", newSPI);
 			if (is_rekey_child) {
+				Dbg("Inside rekeying child");
 				UINT childSPI = *(UINT*)(rekeyNotify->spi->Buf);
-				
+
 				IKEv2_IPSECSA* child = NULL;
 				UINT count = LIST_NUM(ike->ipsec_SAs);
 				for (int i = 0; i < count; ++i) {
@@ -1439,7 +1448,7 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 
 				if (child == NULL) {
 					Dbg("CHILD_SA with SPI == %u not found", childSPI);
-					
+
 					Free(newSetting);
 					if (shared_secret != NULL) {
 						Free(shared_secret);
@@ -1447,7 +1456,8 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 
 					goto free_end;
 				}
-				
+
+				Dbg("Child is not null");
 				// Proposal has different SPI field value?
 				child->SPI = newSPI;
 				Ikev2FreeCryptoParam(child->param);
@@ -1457,11 +1467,13 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 				child->param->setting = newSetting;
 			}
 			else {
+				Dbg("Creating & adding new ipsec_sa");
 				IKEv2_IPSECSA* ipsec_newSA = Ikev2CreateIPsecSA(newSPI, ikeSA, key_data, newSetting);
 				Add(ike->ipsec_SAs, ipsec_newSA);
 			}
 
-free_end:
+		free_end:
+			Dbg("Freeing data structures");
 			Ikev2FreePayload(chosenSA);
 			FreeBuf(nonce_r);
 			if (dh != NULL) {
@@ -1515,11 +1527,11 @@ free_end:
 					UINT64 newSPIr = Ikev2CreateSPI(ike);
 					BUF* nonce_r = Ikev2GenerateNonce(newSetting->prf->key_size);
 					DbgBuf("Nonce_r", nonce_r);
-					
-					IKEv2_CRYPTO_KEY_DATA* key_data = 
-						IKEv2GenerateKeymatForIKESA(newSetting, nonce->nonce, nonce_r, shared_key, 
-													newSetting->dh->size, SPIi, SPIr, param->key_data->sk_d, param->key_data->prf_key_size, false);
-					
+
+					IKEv2_CRYPTO_KEY_DATA* key_data =
+						IKEv2GenerateKeymatForIKESA(newSetting, nonce->nonce, nonce_r, shared_key,
+							newSetting->dh->size, SPIi, SPIr, param->key_data->sk_d, param->key_data->prf_key_size, false);
+
 					if (key_data == NULL) {
 						Dbg("Keying material generation failed");
 						Free(newSetting);
@@ -1531,7 +1543,7 @@ free_end:
 					}
 
 					Dbg("continue: key data size: %u", KE->key_data->Size);
-					
+
 					IKEv2_PACKET_PAYLOAD* KEr = Ikev2CreateKE(newSetting->dh->type, dh->MyPublicKey);
 					IKEv2_PACKET_PAYLOAD* Nr = Ikev2CreateNonce(nonce_r);
 
@@ -1551,7 +1563,7 @@ free_end:
 
 					IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_CREATE_CHILD_SA, true, false, false, packet->MessageId, sk_list);
 					Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, ikeSA->param);
-					
+
 					ikeSA->SPIi = newSPIi;
 					ikeSA->SPIr = newSPIr;
 
