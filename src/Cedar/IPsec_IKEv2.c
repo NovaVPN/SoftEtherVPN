@@ -1358,7 +1358,8 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 				goto end;
 			}
 
-			IKEv2_SA_PAYLOAD* SAr = ((IKEv2_SA_PAYLOAD*)chosenSA->data);
+			Dbg("Continue rekeying");
+			IKEv2_SA_PAYLOAD* SAr = (IKEv2_SA_PAYLOAD*)(chosenSA->data);
 			UCHAR* shared_secret = NULL;
 			DH_CTX* dh = NULL;
 			if (KE != NULL) {
