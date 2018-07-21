@@ -121,6 +121,7 @@ typedef struct IKEv2_SA {
 
 typedef struct IKEv2_IPSECSA {
 	UINT SPI;
+	IKEv2_CRYPTO_PARAM* param;
 	IKEv2_SA* ike_sa;
 } IKEv2_IPSECSA;
 
