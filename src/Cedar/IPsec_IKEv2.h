@@ -152,7 +152,7 @@ IKEv2_SERVER* NewIkev2Server(CEDAR* cedar, IPSEC_SERVER *ipsec); // global
 IKEv2_CRYPTO_ENGINE* CreateIkev2CryptoEngine();
 IKEv2_CLIENT* NewIkev2Client(IP* clientIP, UINT clientPort, IP* serverIP, UINT serverPort);
 IKEv2_SA* Ikev2CreateSA(UINT64 SPIi, UINT64 SPIr, IKEv2_CRYPTO_SETTING* setting, IKEv2_CRYPTO_KEY_DATA* key_data);
-IKEv2_IPSECSA* Ikev2CreateIPsecSA(UINT SPI, IKEv2_SA* parent_IKESA);
+IKEv2_IPSECSA* Ikev2CreateIPsecSA(UINT SPI, IKEv2_SA* parent_IKESA, IKEv2_CRYPTO_KEY_DATA* key_data, IKEv2_CRYPTO_SETTING* setting);
 
 void Ikev2FreeServer(IKEv2_SERVER* server); // global
 void Ikev2FreeSA(IKEv2_SA* sa);
