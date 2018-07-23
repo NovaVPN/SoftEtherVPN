@@ -283,6 +283,10 @@ typedef struct IKEv2_NOTIFY_PAYLOAD {
 // End of NOTIFY Payload
 
 // DELETE Payload
+#define IKEv2_DELETE_PROTO_IKE	1
+#define IKEv2_DELETE_PROTO_AH	2
+#define IKEv2_DELETE_PROTO_ESP	3
+
 typedef struct IKEv2_DELETE_PAYLOAD {
 	UCHAR protocol_id;
 	UCHAR spi_size;

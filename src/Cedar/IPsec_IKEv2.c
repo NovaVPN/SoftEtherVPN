@@ -168,20 +168,21 @@ void Ikev2FreeServer(IKEv2_SERVER* server) {
 		return;
 	}
 
+	// Free clients?
 	ReleaseList(server->clients);
+
+	UINT ipsec_sa_count = LIST_NUM(server->ipsec_SAs);
+	for (UINT i = 0; i < ipsec_sa_count; ++i) {
+		Ikev2FreeIPSECSA((IKEv2_IPSECSA*)(LIST_DATA(server->ipsec_SAs, i)));
+	}
+	ReleaseList(server->ipsec_SAs);
 
 	//IKE free
 	UINT sa_count = LIST_NUM(server->SAs);
 	for (UINT i = 0; i < sa_count; ++i) {
-		Ikev2FreeSA((IKEv2_SA*)(LIST_DATA(server->SAs, i)));
+		Ikev2FreeIKESA((IKEv2_SA*)(LIST_DATA(server->SAs, i)));
 	}
 	ReleaseList(server->SAs);
-
-	UINT ipsec_sa_count = LIST_NUM(server->ipsec_SAs);
-	for (UINT i = 0; i < ipsec_sa_count; ++i) {
-		Ikev2FreeSA((IKEv2_SA*)(LIST_DATA(server->ipsec_SAs, i)));
-	}
-	ReleaseList(server->ipsec_SAs);
 
 	Ikev2FreeCryptoEngine(server->engine);
 	FreeIKEServer(server->ike_server);
@@ -221,15 +222,42 @@ void Ikev2FreeCryptoParam(IKEv2_CRYPTO_PARAM* param) {
 	Free(param);
 }
 
-void Ikev2FreeSA(IKEv2_SA* sa) {
+void Ikev2FreeIPSECSA(IKEv2_IPSECSA* sa) {
+	if (sa == NULL) {
+		return;
+	}
+
+	Ikev2FreeCryptoParam(sa->param);
+	Free(sa);
+}
+
+void Ikev2FreeIKESA(IKEv2_SA* sa) {
 	if (sa == NULL) {
 		return;
 	}
 
 	Ikev2FreeCryptoParam(sa->param);
 
+	if (sa->nonce_i != NULL) {
+		FreeBuf(sa->nonce_i);
+	}
+
+	if (sa->nonce_r != NULL) {
+		FreeBuf(sa->nonce_r);
+	}
+
+	if (sa->succ_request != NULL) {
+		FreeBuf(sa->succ_request);
+	}
+
+	if (sa->succ_response != NULL) {
+		FreeBuf(sa->succ_response);
+	}
+
+	// Free client ?
+
 	if (sa->eap_sa != NULL) {
-		ikev2_free_SA_payload(sa->eap_sa);
+		//ikev2_free_SA_payload(sa->eap_sa);
 	}
 
 	if (sa->TSr != NULL) {
@@ -1072,7 +1100,8 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 				IKEv2_TS_PAYLOAD* TSi = pTSi->data;
 				IKEv2_TS_PAYLOAD* TSr = pTSr->data;
 
-				SA->eap_sa = SAi;
+				// Comment this for now
+				//SA->eap_sa = SAi; 
 				SA->TSi = TSi;
 				SA->TSr = TSr;
 
@@ -3069,14 +3098,54 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCP(IKEv2_CP_PAYLOAD *peer_conf, LIST* attribute
 	return payload;
 }
 
-void Ikev2DeleteSAWithInformational() {
-    //TODO deletion of
-}
-
+// ?
 void Ikev2SendNotify(UINT64 SPIi, UINT64 SPIr, UINT msgID, IKEv2_PACKET_PAYLOAD* notify) {
   if (notify == NULL) {
     return;
   }
+}
+
+void Ikev2DeleteIKESA(IKEv2_SERVER* ike, IKEv2_SA* sa) {
+	if (ike == NULL || sa == NULL) {
+		return;
+	}
+
+	Dbg("Inside deleting IKE_SA");
+	UINT child_count = LIST_NUM(ike->ipsec_SAs);
+	for (UINT i = 0; i < child_count; ++i) {
+		IKEv2_IPSECSA* child = (IKEv2_IPSECSA*)LIST_DATA(ike->ipsec_SAs, i);
+		if (child->ike_sa == sa) {
+			Delete(ike->ipsec_SAs, child);
+			Ikev2FreeIPSECSA(child);
+			i--;
+		}
+	}
+
+	Delete(ike->SAs, sa);
+	Ikev2FreeIKESA(sa);
+
+	Dbg("IKE_SA deleted");
+}
+
+bool Ikev2DeleteChildSA(IKEv2_SERVER* ike, IKEv2_SA* parent, UINT SPI) {
+	if (ike == NULL || parent == NULL) {
+		return false;
+	}
+
+	Dbg("Inside deleting CHILD_SA");
+	UINT sa_count = LIST_NUM(ike->ipsec_SAs);
+	for (UINT i = 0; i < sa_count; ++i) {
+		IKEv2_IPSECSA* sa = (IKEv2_IPSECSA*)LIST_DATA(ike->ipsec_SAs, i);
+		if (sa->SPI == SPI && sa->ike_sa == parent) {
+			Dbg("CHILD_SA found, freeing & deleting");
+			Delete(ike->ipsec_SAs, sa);
+			Ikev2FreeIPSECSA(sa);
+			return true;
+		}
+	}
+
+	Dbg("No child sa was deleted...");
+	return false;
 }
 
 void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET *p) {
@@ -3131,25 +3200,51 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 		return;
 	}
 
-	/* IKEv2_PACKET_PAYLOAD *notify =Ikev2GetPayloadByType(payloads, IKEv2_NOTIFY_PAYLOAD_T, 0); */
-	IKEv2_PACKET_PAYLOAD *delete_i = Ikev2GetPayloadByType(payloads, IKEv2_DELETE_PAYLOAD_T, 0);
-	if (delete_i == NULL) {
-		Dbg("delete payload is null");
-		return;
+	LIST* to_send = NewList(NULL);
+
+	LIST* delete_payloads = Ikev2GetAllPayloadsByType(payloads, IKEv2_DELETE_PAYLOAD_T);
+	UINT pay_count = LIST_NUM(delete_payloads);
+	for (UINT i = 0; i < pay_count; ++i) {
+		IKEv2_PACKET_PAYLOAD* pDel = (IKEv2_PACKET_PAYLOAD*)LIST_DATA(delete_payloads, i);
+		IKEv2_DELETE_PAYLOAD* del = (IKEv2_DELETE_PAYLOAD*)pDel->data;
+		Dbg("[Informational] Delete: proto id: %u, spi size %u, num_spi: %u", del->protocol_id, del->spi_size, del->num_spi);
+
+		switch (del->protocol_id) {
+		case IKEv2_DELETE_PROTO_IKE:
+			Dbg("Deleting IKE_SA");
+			Ikev2DeleteIKESA(ike, SA);
+			break;
+		case IKEv2_DELETE_PROTO_AH:
+			Dbg("AH is not supported");
+			break;
+		case IKEv2_DELETE_PROTO_ESP: {
+			Dbg("Deleting ESP CHILD_SA");
+			USHORT spi_count = del->num_spi;
+			for (USHORT j = 0; j < spi_count; ++j) {
+				UINT SPI = ReadBufInt((BUF*)LIST_DATA(del->spi_list, j));
+				bool res = Ikev2DeleteChildSA(ike, SA, SPI);
+				if (res == true) {
+					Add(to_send, pDel);
+				}
+			}
+			break;
+		}
+		default:
+			Dbg("Got unsupported protocol in delete: %u", del->protocol_id);
+		}
 	}
-	/* IKEv2_PACKET_PAYLOAD *cp =Ikev2GetPayloadByType(payloads, IKEv2_CP_PAYLOAD_T, 0); */
-	IKEv2_DELETE_PAYLOAD* del = (IKEv2_DELETE_PAYLOAD*)delete_i->data;
-	Dbg("[informational] D num_spi: %u spi_list_len %u proto id: %u spi size %u", del->num_spi,
-		LIST_NUM(del->spi_list), del->protocol_id, del->spi_size);
 
-	BUF* valid = NewBuf();
-	IKEv2_PACKET_PAYLOAD* notification = Ikev2CreateNotify(IKEv2_NO_ERROR, NULL, valid, false);
-	LIST* to_send = NewListSingle(notification);
-	IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, 0, IKEv2_INFORMATIONAL, true, false, false, packet->MessageId, to_send);
-	Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, NULL);
+	// TODO: maybe fuckup with param, redo this
+	IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(to_send, param);
+	LIST* sk_list = NewListSingle(sk);
 
-	Ikev2FreePayload(delete_i);
-	Dbg("free payload kek");
+	IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, SPIr, IKEv2_INFORMATIONAL, true, false, false, packet->MessageId, sk_list);
+	Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, param);
+
+	Dbg("Freeing informational exchange");
+	Ikev2FreePacket(np);
+	ReleaseList(to_send);
+
 	return;
 
 	/* IKEv2_PACKET_PAYLOAD* notify_p = NULL; */
