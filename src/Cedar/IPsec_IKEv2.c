@@ -312,8 +312,6 @@ void ProcessIKEv2PacketRecv(IKEv2_SERVER *ike, UDPPACKET *p) {
 		return;
 	}
 
-	Dbg("In IKEv2 packet recv");
-
 	IKEv2_PACKET *header = ParseIKEv2PacketHeader(p);
 	if (header == NULL) {
 		Dbg("Packet header is null");
@@ -742,34 +740,28 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		return;
 	}
 
+	Dbg("SA_INIT started");
+
 	IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, NULL);
 	if (packet == NULL) {
 		Dbg("SA_INIT: can't parse packet");
-		return;
+		goto end;
 	}
 
 	UINT64 SPIi = packet->SPIi;
-	Dbg("SA_INIT: SPIi: %u", SPIi);
 	if (Ikev2HasAlreadyInit(ike, SPIi, p) == true) {
 		// retransmitted sa_init, exit
 		Dbg("SA_INIT retransmitted");
-		return;
+		goto end;
 	}
 
 	IKEv2_PACKET_PAYLOAD* SAi = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_SA_PAYLOAD_T, 0);
 	IKEv2_PACKET_PAYLOAD* KEi = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_KE_PAYLOAD_T, 0);
 	IKEv2_PACKET_PAYLOAD* Ni = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_NONCE_PAYLOAD_T, 0);
 
-	Dbg("Got payloads:");
-	UINT cn = LIST_NUM(packet->PayloadList);
-	for (UINT i = 0; i < cn; ++i) {
-		Debug("%u ", ((IKEv2_PACKET_PAYLOAD*)LIST_DATA(packet->PayloadList, i))->PayloadType);
-	}
-	Debug("\n");
-
 	if (SAi == NULL || KEi == NULL || Ni == NULL) {
 		Dbg("Error: SAi: %p KEi: %p Ni: %p", SAi, KEi, Ni);
-		return;
+		goto end;
 	}
 
 	IKEv2_SA_PAYLOAD* SA = SAi->data;
@@ -777,10 +769,8 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 	IKEv2_NONCE_PAYLOAD* nonce_i = Ni->data;
 
 	IKEv2_CRYPTO_SETTING* setting = (IKEv2_CRYPTO_SETTING*)ZeroMalloc(sizeof(IKEv2_CRYPTO_SETTING));
-	Dbg("choosing best parameters for IKE_SA");
 	IKEv2_PACKET_PAYLOAD* SAr = Ikev2ChooseBestIKESA(ike, SA, setting, IKEv2_PROPOSAL_PROTOCOL_IKE);
-	Dbg("IKE_SA choosen");
-	
+
 	if (SAr == NULL) { // All transforms are incompatible, SA not chosen
 		Dbg("Responder SA cannot be constructed");
 
@@ -794,15 +784,14 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 
 		Ikev2FreePacket(np);
 		Free(setting);
-		
-		Dbg("all freed");
-		return;
+
+		goto end;
 	}
 
 	// Not guessed DH_transform_ID in KE payload
 	if (setting->dh->type != KE->DH_transform_ID) {
-		Dbg("setting->dh->type: %u KE->DH_transform_ID: %u", setting->dh->type, KE->DH_transform_ID);
-		
+		Dbg("Setting->dh->type: %u KE->DH_transform_ID: %u", setting->dh->type, KE->DH_transform_ID);
+
 		BUF* error = NewBuf();
 		WriteBufShort(error, setting->dh->type);
 		IKEv2_PACKET_PAYLOAD* notification = Ikev2CreateNotify(IKEv2_INVALID_KE_PAYLOAD, NULL, error, false);
@@ -815,100 +804,85 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		Free(setting);
 		Ikev2FreePayload(SAr);
 		Ikev2FreePacket(np);
-		
-		Dbg("all freed");
-		return;
+
+		goto end;
 	}
 
-	Dbg("Creating DH_CTX");
 	DH_CTX* dh = Ikev2CreateDH_CTX(setting->dh);
 	if (dh == NULL) {
 		Dbg("DH_CTX creation failure");
 		Free(setting);
 		Ikev2FreePayload(SAr);
+
+		goto end;
 	}
-	else {
-		UCHAR* shared_key = ZeroMalloc(sizeof(UCHAR) * setting->dh->size); // g ^ ir
-		Dbg("key data size: %u", KE->key_data->Size);
-		if (DhCompute(dh, shared_key, KE->key_data->Buf, KE->key_data->Size)) {
-			DbgPointer("Shared key", shared_key, setting->dh->size);
-			UINT64 SPIr = Ikev2CreateSPI(ike);
-			BUF* nonce_r = Ikev2GenerateNonce(setting->prf->key_size);
-			DbgBuf("Nonce_r", nonce_r);
 
-			IKEv2_CRYPTO_KEY_DATA* key_data = 
-				IKEv2GenerateKeymatForIKESA(setting, nonce_i->nonce, nonce_r, shared_key, setting->dh->size, SPIi, SPIr, NULL, 0, true);
-			
-			if (key_data == NULL) {
-				Dbg("Keying material generation failed");
-				Free(setting);
-				Ikev2FreePayload(SAr);
-				IkeDhFreeCtx(dh);
-				Free(shared_key);
-				FreeBuf(nonce_r);
-				return;
-			}
+	UCHAR* shared_key = ZeroMalloc(sizeof(UCHAR) * setting->dh->size); // g ^ ir
+	if (DhCompute(dh, shared_key, KE->key_data->Buf, KE->key_data->Size)) {
+		UINT64 SPIr = Ikev2CreateSPI(ike);
+		BUF* nonce_r = Ikev2GenerateNonce(setting->prf->key_size);
 
-			Dbg("continue: key data size: %u", KE->key_data->Size);
-			IKEv2_CLIENT* client = NewIkev2Client(&p->SrcIP, p->SrcPort, &p->DstIP, p->DestPort);
-			IKEv2_SA* newSA = Ikev2CreateSA(SPIi, SPIr, setting, key_data);
-			newSA->client = client;
-			newSA->hasEstablished = false;
-			newSA->nonce_i = CloneBuf(nonce_i->nonce);
-			newSA->nonce_r = CloneBuf(nonce_r);
-			newSA->succ_request = CloneBuf(packet->ByteMsg);
+		IKEv2_CRYPTO_KEY_DATA* key_data =
+			IKEv2GenerateKeymatForIKESA(setting, nonce_i->nonce, nonce_r, shared_key, setting->dh->size, SPIi, SPIr, NULL, 0, true);
 
-			Dbg("generated NEW SA: I: %u R: %u", newSA->SPIi, newSA->SPIr);
-
-			Add(ike->clients, client);
-			Add(ike->SAs, newSA);
-
-			IKEv2_PACKET_PAYLOAD* KEr = Ikev2CreateKE(setting->dh->type, dh->MyPublicKey);
-			IKEv2_PACKET_PAYLOAD* Nr = Ikev2CreateNonce(nonce_r);
-
-			LIST* send_list = NewListFast(NULL);
-			Add(send_list, SAr);
-			Add(send_list, KEr);
-			Add(send_list, Nr);
-
-			IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_SA_INIT, true, false, false, packet->MessageId, send_list);
-			Ikev2SendPacket(ike, client, to_send, NULL);
-			newSA->succ_response = CloneBuf(to_send->ByteMsg);
-
-			FreeBuf(nonce_r);
-			Ikev2FreePacket(to_send);
-		}
-		else {
-			Dbg("Dh compute failed");
+		if (key_data == NULL) {
+			Dbg("Keying material generation failed");
 			Free(setting);
 			Ikev2FreePayload(SAr);
+			IkeDhFreeCtx(dh);
 			Free(shared_key);
+			FreeBuf(nonce_r);
+
+			goto end;
 		}
 
-		IkeDhFreeCtx(dh);
+		IKEv2_CLIENT* client = NewIkev2Client(&p->SrcIP, p->SrcPort, &p->DstIP, p->DestPort);
+		IKEv2_SA* newSA = Ikev2CreateSA(SPIi, SPIr, setting, key_data);
+		newSA->client = client;
+		newSA->hasEstablished = false;
+		newSA->nonce_i = CloneBuf(nonce_i->nonce);
+		newSA->nonce_r = CloneBuf(nonce_r);
+		newSA->succ_request = CloneBuf(packet->ByteMsg);
+
+		Add(ike->clients, client);
+		Add(ike->SAs, newSA);
+
+		IKEv2_PACKET_PAYLOAD* KEr = Ikev2CreateKE(setting->dh->type, dh->MyPublicKey);
+		IKEv2_PACKET_PAYLOAD* Nr = Ikev2CreateNonce(nonce_r);
+
+		LIST* send_list = NewListFast(NULL);
+		Add(send_list, SAr);
+		Add(send_list, KEr);
+		Add(send_list, Nr);
+
+		IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_SA_INIT, true, false, false, packet->MessageId, send_list);
+		Ikev2SendPacket(ike, client, to_send, NULL);
+		newSA->succ_response = CloneBuf(to_send->ByteMsg);
+
+		FreeBuf(nonce_r);
+		Ikev2FreePacket(to_send);
 	}
+	else {
+		Dbg("Dh compute failed");
+		Free(setting);
+		Ikev2FreePayload(SAr);
+		Free(shared_key);
+	}
+
+	IkeDhFreeCtx(dh);
+
+end:
+	Dbg("SA_INIT finished\n");
 }
 
 BUF* IKEv2ComputeSignedOctets(BUF* message, BUF* nonce, IKEv2_PRF* prf, void* key, UINT key_size, BUF* id) {
-	if (message == NULL || nonce == NULL || key == NULL || id == NULL) {
-		if (message == NULL) {
-			Dbg("msg is null");
-		}
-		if (nonce == NULL) {
-			Dbg("nonce is null");
-		}
-		if (key == NULL) {
-			Dbg("key is null");
-		}
-		if (id == NULL) {
-			Dbg("id is null");
-		}
+	if (message == NULL || nonce == NULL || prf == NULL || key == NULL || id == NULL) {
 		return NULL;
 	}
 
 	void* mac = Ikev2CalcPRF(prf, key, key_size, id->Buf, id->Size);
 	if (mac == NULL) {
-		Debug("SignedOctets prf calc failed\n");
+		Dbg("SignedOctets prf calc failed");
 		return NULL;
 	}
 
@@ -922,7 +896,7 @@ BUF* IKEv2ComputeSignedOctets(BUF* message, BUF* nonce, IKEv2_PRF* prf, void* ke
 }
 
 BUF* IKEv2CalcAuth(IKEv2_PRF* prf, void* shared_key, UINT key_size, void* text, UINT text_size, BUF* octets) {
-	if (shared_key == NULL || text == NULL || octets == NULL) {
+	if (prf == NULL || shared_key == NULL || text == NULL || octets == NULL) {
 		return NULL;
 	}
 

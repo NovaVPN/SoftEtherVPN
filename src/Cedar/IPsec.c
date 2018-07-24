@@ -272,7 +272,7 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 	// UDP decapsulation process
 	if (p->DestPort == IPSEC_PORT_IPSEC_ESP_UDP)
 	{
-		Dbg("UDP ESP Packet\n");
+		Dbg("UDP ESP Packet");
 
 		if (p->Size >= 4 && IsZero(p->Data, 4))
 		{
@@ -432,7 +432,8 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 		for (i = 0; i < LIST_NUM(packet_list); i++)
 		{
 			UDPPACKET *p = LIST_DATA(packet_list, i);
-			Dbg("\nRecieved IPSEC packet");
+			Debug("\n");
+			Dbg("Recieved IPSEC packet");
 			IPsecProcPacket(s, p);
 		}
 	}
