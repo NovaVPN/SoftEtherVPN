@@ -3179,7 +3179,6 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 		return;
 	}
 
-	Dbg("[informational] found SK payload, OK");
 	IKEv2_SK_PAYLOAD* SKi = (IKEv2_SK_PAYLOAD*)pSKi->data;
 	LIST* payloads = SKi->decrypted_payloads;
 
@@ -3202,6 +3201,7 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 
 	LIST* to_send = NewList(NULL);
 
+	bool needDeleteIKE = false;
 	LIST* delete_payloads = Ikev2GetAllPayloadsByType(payloads, IKEv2_DELETE_PAYLOAD_T);
 	UINT pay_count = LIST_NUM(delete_payloads);
 	for (UINT i = 0; i < pay_count; ++i) {
@@ -3211,8 +3211,8 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 
 		switch (del->protocol_id) {
 		case IKEv2_DELETE_PROTO_IKE:
-			Dbg("Deleting IKE_SA");
-			Ikev2DeleteIKESA(ike, SA);
+			Dbg("Need to delete IKE_SA");
+			needDeleteIKE = true;
 			break;
 		case IKEv2_DELETE_PROTO_AH:
 			Dbg("AH is not supported");
@@ -3221,7 +3221,7 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 			Dbg("Deleting ESP CHILD_SA");
 			USHORT spi_count = del->num_spi;
 			for (USHORT j = 0; j < spi_count; ++j) {
-				UINT SPI = ReadBufInt((BUF*)LIST_DATA(del->spi_list, j));
+				UINT SPI = *(UINT*)((BUF*)LIST_DATA(del->spi_list, j))->Buf;
 				bool res = Ikev2DeleteChildSA(ike, SA, SPI);
 				if (res == true) {
 					Add(to_send, pDel);
@@ -3234,7 +3234,6 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 		}
 	}
 
-	// TODO: maybe fuckup with param, redo this
 	IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(to_send, param);
 	LIST* sk_list = NewListSingle(sk);
 
@@ -3244,6 +3243,10 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 	Dbg("Freeing informational exchange");
 	Ikev2FreePacket(np);
 	ReleaseList(to_send);
+
+	if (needDeleteIKE == true) {
+		Ikev2DeleteIKESA(ike, SA);
+	}
 
 	return;
 
