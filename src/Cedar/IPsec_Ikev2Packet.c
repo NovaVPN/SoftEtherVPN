@@ -42,7 +42,6 @@ BUF* ikev2_SA_encode(IKEv2_SA_PAYLOAD *p) {
 				WriteBufShort(tpb, attr->value);
 
 				if (attr->format == 0) {
-					Dbg("Attr format = 0, value=%u", attr->value);
 					WriteBufBuf(tpb, attr->TLV_value);
 				}
 			}
@@ -61,15 +60,12 @@ BUF* ikev2_SA_encode(IKEv2_SA_PAYLOAD *p) {
 			FreeBuf(tpb);
 		}
 
-		/*Dbg("is_last: %d size: %d number: %d proto_id: %d SPI_size: %d trns_number: %d",
-			(UCHAR)(prop->is_last ? 2 : 0),pb->Size, prop->number, prop->protocol_id, prop->SPI_size, prop->transform_number);
-        */
 		BUF *pb = NewBuf();
 		// Encode proposal
 		WriteBufChar(pb, (UCHAR)((prop->is_last == false) ? 2 : 0));
 		WriteBufChar(pb, (UCHAR)0);
 
-		//skip proposal_length now
+		// skip proposal_length now
 		// header size offset
 		WriteBufShort(pb, (USHORT)tb->Size + 8 + prop->SPI_size);
 
@@ -97,7 +93,7 @@ UINT ikev2_SA_decode(BUF *b, IKEv2_SA_PAYLOAD *p) {
 		IKEv2_SA_PROPOSAL *proposal = (IKEv2_SA_PROPOSAL*)Malloc(sizeof(IKEv2_SA_PROPOSAL));
 		if (proposal == NULL) {
 			ikev2_free_SA_payload(p);
-			Dbg("error while allocate memory for SA_PROPOSAL");
+			Dbg("Error while allocate memory for SA_PROPOSAL");
 			return IKEv2_OUT_OF_MEMORY;
 		}
 
@@ -110,8 +106,7 @@ UINT ikev2_SA_decode(BUF *b, IKEv2_SA_PAYLOAD *p) {
 		proposal->protocol_id = ReadBufChar(b);
 		proposal->SPI_size = ReadBufChar(b);
 		proposal->transform_number = ReadBufChar(b);
-		Dbg("buffers readed");
-
+		
 		if (proposal->SPI_size > 0) {
 			proposal->SPI = ReadBufFromBuf(b, proposal->SPI_size);
 		}
@@ -120,12 +115,11 @@ UINT ikev2_SA_decode(BUF *b, IKEv2_SA_PAYLOAD *p) {
 		}
 
 		proposal->transforms = NewListFast(NULL);
-		Dbg("proposal_transform_num: %d",proposal->transform_number );
 		for (UCHAR i = 0; i < proposal->transform_number; ++i) {
 			IKEv2_SA_TRANSFORM *t = (IKEv2_SA_TRANSFORM*)ZeroMalloc(sizeof(IKEv2_SA_TRANSFORM));
 			if (t == NULL) {
 				ikev2_free_SA_payload(p);
-				Dbg("error while allocate memory for SA_TRANSFORM");
+				Dbg("Error while allocate memory for SA_TRANSFORM");
 				return IKEv2_OUT_OF_MEMORY;
 			}
 
@@ -139,13 +133,11 @@ UINT ikev2_SA_decode(BUF *b, IKEv2_SA_PAYLOAD *p) {
 
 			t->attributes = NewListFast(NULL);
 			USHORT len = t->transform_length-8;
-//			Dbg("transforms: %d", len);
 			while (len > 0) {
-//				Dbg("len: %d", len);
 				IKEv2_TRANSFORM_ATTRIBUTE *attr = (IKEv2_TRANSFORM_ATTRIBUTE*)ZeroMalloc(sizeof(IKEv2_TRANSFORM_ATTRIBUTE));
 				if (attr == NULL) {
 					ikev2_free_SA_payload(p);
-					Dbg("cant allocate memory for TRANSFORM_ATTRIBUTE");
+					Dbg("Can't allocate memory for TRANSFORM_ATTRIBUTE");
 					return IKEv2_OUT_OF_MEMORY;
 				}
 
@@ -153,11 +145,9 @@ UINT ikev2_SA_decode(BUF *b, IKEv2_SA_PAYLOAD *p) {
 				attr->format = ((attrType & (1 << 15)) > 0) ? 1 : 0;
 				attr->type = attrType & ((1 << 15) - 1);
 				attr->value = ReadBufShort(b);
-				Dbg("attribute: type: %u value: %u", attrType, attr->value);
 				len -= 4;
 				if (attr->format == 0) {
 					attr->TLV_value = ReadBufFromBuf(b, attr->value);
-					Dbg("attr TLV used with size %d", attr->TLV_value->Size );
 					len -= attr->TLV_value->Size;
 				}
 
@@ -174,8 +164,7 @@ UINT ikev2_SA_decode(BUF *b, IKEv2_SA_PAYLOAD *p) {
 		isLastProposal = isLast ^ 2;
 	}
 
-    Dbg("finished");
-	return IKEv2_NO_ERROR;
+    return IKEv2_NO_ERROR;
 }
 
 void ikev2_free_SA_transform(IKEv2_SA_TRANSFORM *t) {

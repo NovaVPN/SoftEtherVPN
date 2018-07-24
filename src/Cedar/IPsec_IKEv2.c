@@ -9,7 +9,7 @@
 IKEv2_SERVER* NewIkev2Server(CEDAR* cedar, IPSEC_SERVER *ipsec) {
 	IKEv2_SERVER* server = (IKEv2_SERVER*)Malloc(sizeof(IKEv2_SERVER));
 	if (server == NULL) {
-		Dbg("failed to allocate memory");
+		Dbg("Failed to allocate memory for IKEv2_SERVER");
 		return NULL;
 	}
 	if (cedar == NULL) Debug("cedar is null\n");
@@ -28,7 +28,7 @@ IKEv2_SERVER* NewIkev2Server(CEDAR* cedar, IPSEC_SERVER *ipsec) {
 IKEv2_CRYPTO_ENGINE* CreateIkev2CryptoEngine() {
 	IKEv2_CRYPTO_ENGINE* ret = ZeroMalloc(sizeof(IKEv2_CRYPTO_ENGINE));
 	if (ret == NULL) {
-		Dbg("failed to allocate memory");
+		Dbg("Failed to allocate memory for crypto engine");
 		return NULL;
 	}
 
@@ -95,7 +95,6 @@ IKEv2_CRYPTO_ENGINE* CreateIkev2CryptoEngine() {
 	ret->ike_dh[IKEv2_TRANSFORM_ID_DH_4096] = dh_4096;
 	ret->ike_dh[IKEv2_TRANSFORM_ID_DH_6144] = dh_6144;
 	ret->ike_dh[IKEv2_TRANSFORM_ID_DH_8192] = dh_8192;
-  Dbg("crypto engine has been initialized");
 
 	return ret;
 }
@@ -1617,8 +1616,6 @@ IKEv2_PACKET* ParseIKEv2PacketHeader(UDPPACKET *udp) {
 		return NULL;
 	}
 
-	Dbg("Parsing packet header");
-
 	IKEv2_HEADER *h = (IKEv2_HEADER*)udp->Data;
 
 	if (Endian32(h->message_length) < udp->Size) {
@@ -1683,7 +1680,7 @@ IKEv2_PACKET *Ikev2ParsePacket(IKEv2_PACKET* p, void *data, UINT size, IKEv2_CRY
 	UINT payload_size = p->MessageSize - sizeof(IKEv2_HEADER);
 
 	UCHAR next_last_payload_type;
-	p->PayloadList = Ikev2ParsePayloadList(payload_data, payload_size, p->NextPayload, &next_last_payload_type, true);
+	p->PayloadList = Ikev2ParsePayloadList(payload_data, payload_size, p->NextPayload, &next_last_payload_type);
 
 	if (p->PayloadList == NULL) {
 		Dbg("Payload list is NULL after parsing packet");
@@ -1732,7 +1729,7 @@ IKEv2_PACKET *Ikev2ParsePacket(IKEv2_PACKET* p, void *data, UINT size, IKEv2_CRY
 							UINT new_pay_size = buf->Size - sk->pad_length - 1;
 
 							UCHAR dummy;
-							sk->decrypted_payloads = Ikev2ParsePayloadList(buf->Buf, new_pay_size, next_last_payload_type, &dummy, true);
+							sk->decrypted_payloads = Ikev2ParsePayloadList(buf->Buf, new_pay_size, next_last_payload_type, &dummy);
 							if (sk->decrypted_payloads == NULL) {
 								Dbg("Decrypted payloads == NULL");
 								ret = NULL;
@@ -1753,30 +1750,26 @@ IKEv2_PACKET *Ikev2ParsePacket(IKEv2_PACKET* p, void *data, UINT size, IKEv2_CRY
 	return ret;
 }
 
-LIST* Ikev2ParsePayloadList(void *data, UINT size, UCHAR first_payload, UCHAR* next_last, bool fromBuf) {
+LIST* Ikev2ParsePayloadList(void *data, UINT size, UCHAR first_payload, UCHAR* next_last) {
 	LIST* payloads = NewList(NULL);
 	UINT total_read = 0;
 	UCHAR cur_payload = first_payload;
 	BUF* buf = MemToBuf(data, size);
 
-  Dbg("PayloadList len: %u", size);
-
 	while (cur_payload != IKEv2_NO_NEXT_PAYLOAD_T) {
 		IKEv2_PAYLOAD_HEADER header;
-		Dbg("cur_payload: 0x%x", cur_payload);
 
 		UINT read = ReadBuf(buf, &header, sizeof(IKEv2_PAYLOAD_HEADER));
 		if (read != sizeof(IKEv2_PAYLOAD_HEADER)) {
-			Dbg("IKEv2: Broken Packet (Invalid Payload Header) got: %u, expected: %u", read, sizeof(IKEv2_PAYLOAD_HEADER));
+			Dbg("Broken Packet (Invalid Payload Header) got: %u, expected: %u", read, sizeof(IKEv2_PAYLOAD_HEADER));
 			Ikev2FreePayloadList(payloads);
 			break;
 		}
 
-		USHORT payload_size = ((fromBuf == true) ? Endian16(header.payload_length) : header.payload_length) - sizeof(IKEv2_PAYLOAD_HEADER);
-		Dbg("pay size: %hu buf size: %u", payload_size, buf->Size);
+		USHORT payload_size = Endian16(header.payload_length) - sizeof(IKEv2_PAYLOAD_HEADER);
 		BUF* payload_data = ReadBufFromBuf(buf, payload_size);
 		if (payload_data == NULL) {
-			Dbg("IKEv2: Broken Packet (Invalid Payload Size)");
+			Dbg("Broken Packet (Invalid Payload Size)");
 			Ikev2FreePayloadList(payloads);
 			break;
 		}
@@ -1784,14 +1777,16 @@ LIST* Ikev2ParsePayloadList(void *data, UINT size, UCHAR first_payload, UCHAR* n
 		if (Ikev2IsSupportedPayload(cur_payload) == true) {
 			IKEv2_PACKET_PAYLOAD* payload = Ikev2DecodePayload(cur_payload, payload_data);
 			if (payload == NULL) {
-				Dbg("IKEv2: Broken Payload");
+				Dbg("IKEv2: Broken Payload (Cannot be decoded)");
 				Ikev2FreePayloadList(payloads);
+				FreeBuf(payload_data);
 				break;
-			} else {
-				Dbg("payload decoded");
+			}
+			else {
 				Add(payloads, payload);
 			}
-		} else {
+		}
+		else {
 			Dbg("IKEv2: Unsupported Payload 0x%x", cur_payload);
 			if (header.is_critical > 0) {
 				/*
@@ -1804,8 +1799,10 @@ LIST* Ikev2ParsePayloadList(void *data, UINT size, UCHAR first_payload, UCHAR* n
 				*/
 			}
 		}
+
 		cur_payload = (cur_payload == IKEv2_SK_PAYLOAD_T) ? IKEv2_NO_NEXT_PAYLOAD_T : header.next_payload;
 		*next_last = header.next_payload;
+		FreeBuf(payload_data);
 	}
 
 	FreeBuf(buf);
@@ -1819,14 +1816,14 @@ IKEv2_PACKET_PAYLOAD* Ikev2DecodePayload(UCHAR payload_type, BUF *buf) {
 
 	IKEv2_PACKET_PAYLOAD* payload = (IKEv2_PACKET_PAYLOAD*)ZeroMalloc(sizeof(IKEv2_PACKET_PAYLOAD));
 	if (payload == NULL) {
-		Dbg("cant allocate mem\n");
+		Dbg("Can't allocate memory for IKEv2_PACKET_PAYLOAD");
 		return NULL;
 	}
 	payload->PayloadType = payload_type;
 	payload->data = NULL;
 	UINT error_type = IKEv2_NO_ERROR;
 
-	Dbg("payload type: 0x%x", payload_type);
+	Dbg("Decoding payload with type: 0x%x", payload_type);
 	switch (payload_type) {
 	case IKEv2_SA_PAYLOAD_T:
 		payload->data = ZeroMalloc(sizeof(IKEv2_SA_PAYLOAD));
@@ -1887,7 +1884,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2DecodePayload(UCHAR payload_type, BUF *buf) {
 		error_type = ikev2_EAP_decode(buf, payload->data);
 		break;
 	default:
-		Dbg("Unknown payload: %d", payload_type);
+		Dbg("Unknown payload: %u", payload_type);
 		error_type = IKEv2_EAP_PAYLOAD_T + 1;
 		break;
 	}
@@ -1909,47 +1906,37 @@ IKEv2_PACKET_PAYLOAD* Ikev2DecodePayload(UCHAR payload_type, BUF *buf) {
 }
 
 void Ikev2FreePacket(IKEv2_PACKET *p) {
-	// Validate arguments
 	if (p == NULL) {
-		Dbg("p is null");
 		return;
 	}
 
-	Dbg("Free packet - freeing payload list started");
 	Ikev2FreePayloadList(p->PayloadList);
-	Dbg("Free packet - freeing payload list ended");
-
+	
 	if (p->ByteMsg != NULL) {
-		Dbg("Freeing byte msg");
 		FreeBuf(p->ByteMsg);
 	}
 
 	Free(p);
-	Dbg("IKEv2 packet freed");
 }
 
 void Ikev2FreePayloadList(LIST *payloads) {
 	if (payloads == NULL) {
 		return;
 	}
-	Dbg("freeing IKEv2 payload list");
-
+	
 	for (UINT i = 0; i < LIST_NUM(payloads); ++i) {
 		IKEv2_PACKET_PAYLOAD *p = LIST_DATA(payloads, i);
 		Ikev2FreePayload(p);
 	}
 
 	ReleaseList(payloads);
-	Dbg("IKEv2 payload list freed");
 }
 
 void Ikev2FreePayload(IKEv2_PACKET_PAYLOAD *p) {
-	// Validate arguments
 	if (p == NULL) {
 		return;
 	}
 
-  Dbg("freeing payload type: 0x%x", p->PayloadType);
 	switch (p->PayloadType) {
 	case IKEv2_SA_PAYLOAD_T:
 		ikev2_free_SA_payload(p->data);
@@ -2010,7 +1997,7 @@ void Ikev2FreePayload(IKEv2_PACKET_PAYLOAD *p) {
 		break;
 
 	default:
-		Debug("Freeing payload of unknown type 0x%x\n", p->PayloadType);
+		Dbg("Freeing payload of unknown type 0x%x", p->PayloadType);
 		break;
 	}
 
@@ -2298,16 +2285,17 @@ BUF* Ikev2BuildPayload(IKEv2_PACKET_PAYLOAD *p) {
 }
 
 LIST* Ikev2GetAllPayloadsByType(LIST* payloads, UCHAR type) {
+	LIST* ret = NewListFast(NULL);
+
 	if (payloads == NULL) {
-		return NULL;
+		return ret;
 	}
 
-	LIST* ret = NewListFast(NULL);
 	UINT size = LIST_NUM(payloads);
 	for (UINT i = 0; i < size; ++i) {
 		IKEv2_PACKET_PAYLOAD* payload = (IKEv2_PACKET_PAYLOAD*)LIST_DATA(payloads, i);
 		if (payload->PayloadType == type) {
-			Add(ret, (void*)payload);
+			Add(ret, payload);
 		}
 	}
 
@@ -2315,19 +2303,22 @@ LIST* Ikev2GetAllPayloadsByType(LIST* payloads, UCHAR type) {
 }
 
 IKEv2_PACKET_PAYLOAD* Ikev2GetPayloadByType(LIST* payloads, UCHAR type, UINT index) {
-	LIST* type_list = Ikev2GetAllPayloadsByType(payloads, type);
-
-	if (type_list == NULL) {
-    Dbg("payload list is null");
+	if (payloads == NULL) {
 		return NULL;
 	}
+
+	LIST* type_list = Ikev2GetAllPayloadsByType(payloads, type);
+	IKEv2_PACKET_PAYLOAD* ret = NULL;
 
 	if (LIST_NUM(type_list) <= index) {
-    Dbg("asking index >= len: ask: %d len: %d", index, LIST_NUM(type_list));
-		return NULL;
+		Dbg("No such index: ask %u, len %u", index, LIST_NUM(type_list));
+	} 
+	else {
+		ret = (IKEv2_PACKET_PAYLOAD*)LIST_DATA(type_list, index);
 	}
 
-	return (IKEv2_PACKET_PAYLOAD*)LIST_DATA(type_list, index);
+	ReleaseList(type_list);
+	return ret;
 }
 
 bool Ikev2IsValidTransformType(const IKEv2_SA_TRANSFORM* transform) {
@@ -2345,7 +2336,7 @@ bool Ikev2IsValidTransform(IKEv2_CRYPTO_ENGINE* engine, IKEv2_SA_TRANSFORM* tran
 
 	bool ok = false;
 	// check id
-	Dbg("switching over transforms: 0x%x", transform->transform.type);
+	Dbg("Switching over transforms: 0x%x", transform->transform.type);
 	switch (transform->transform.type) {
 	case IKEv2_TRANSFORM_TYPE_ENCR:
 		ok = ((transform->transform.ID >= IKEv2_TRANSFORM_ID_ENCR_DES && transform->transform.ID <= IKEv2_TRANSFORM_ID_ENCR_BLOWFISH) ||
@@ -2356,8 +2347,8 @@ bool Ikev2IsValidTransform(IKEv2_CRYPTO_ENGINE* engine, IKEv2_SA_TRANSFORM* tran
 		ok = (transform->transform.ID >= IKEv2_TRANSFORM_ID_PRF_HMAC_MD5 && transform->transform.ID <= IKEv2_TRANSFORM_ID_PRF_HMAC_SHA1) ? true : false;
 		break;
 	case IKEv2_TRANSFORM_TYPE_INTEG:
-		/* ok = ((transform->transform.ID >= IKEv2_TRANSFORM_ID_AUTH_NONE && transform->transform.ID <= IKEv2_TRANSFORM_ID_AUTH_HMAC_SHA1_96) || */
-				/* (transform->transform.ID == IKEv2_TRANSFORM_ID_AUTH_AES_XCBC_96)) ? true : false; */
+		/*ok = ((transform->transform.ID >= IKEv2_TRANSFORM_ID_AUTH_NONE && transform->transform.ID <= IKEv2_TRANSFORM_ID_AUTH_HMAC_SHA1_96) ||
+				(transform->transform.ID == IKEv2_TRANSFORM_ID_AUTH_AES_XCBC_96)) ? true : false;*/
 		ok = (transform->transform.ID >= IKEv2_TRANSFORM_ID_AUTH_NONE && transform->transform.ID <= IKEv2_TRANSFORM_ID_AUTH_HMAC_SHA1_96) ? true : false;
 		break;
 	case IKEv2_TRANSFORM_TYPE_DH:
@@ -2376,7 +2367,6 @@ bool Ikev2IsValidTransform(IKEv2_CRYPTO_ENGINE* engine, IKEv2_SA_TRANSFORM* tran
 		UINT attrCount = LIST_NUM(transform->attributes);
 		for (UINT i = 0; i < attrCount; ++i) {
 			IKEv2_TRANSFORM_ATTRIBUTE* attr = (IKEv2_TRANSFORM_ATTRIBUTE*)LIST_DATA(transform->attributes, i);
-			Dbg("Attr type = %u", attr->type);
 			if (attr->type != IKEv2_ATTRIBUTE_TYPE_KEY_LENGTH) {
 				ok = false;
 				break;
@@ -2398,7 +2388,6 @@ bool Ikev2IsValidTransform(IKEv2_CRYPTO_ENGINE* engine, IKEv2_SA_TRANSFORM* tran
 				}
 				else {
 					USHORT val = ((IKEv2_TRANSFORM_ATTRIBUTE*)(LIST_DATA(transform->attributes, 0)))->value / 8;
-					Dbg("Attr val = %u", val);
 					bool found = false;
 					for (UINT i = 0; i < encr->key_info.fixed.key_count; ++i) {
 						if (encr->key_info.fixed.key_sizes[i] == val) {
@@ -2490,47 +2479,45 @@ bool Ikev2IsTransformPresent(IKEv2_SA_PROPOSAL* proposal, UCHAR type) {
 	return false;
 }
 
+// Some memory leaks here
 IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* sa, IKEv2_CRYPTO_SETTING* setting, UCHAR protocol) {
 	if (sa == NULL) {
 		return NULL;
 	}
 
-	Dbg("Inside choosing best SA");
 	IKEv2_PACKET_PAYLOAD* ret = Ikev2CreatePacketPayload(IKEv2_SA_PAYLOAD_T, sizeof(IKEv2_SA_PAYLOAD));
 	if (ret == NULL) {
-		Dbg("failed to allocate mem %d\n", sizeof(IKEv2_PACKET_PAYLOAD));
+		Dbg("Failed to allocate mem for IKEv2_PACKET_PAYLOAD");
 		return NULL;
 	}
 
-	Dbg("OK, packet payload created");
 	IKEv2_SA_PAYLOAD* ret_sa = ((IKEv2_SA_PAYLOAD*)ret->data);
 	ret_sa->proposals = NewList(NULL);
 	LIST** ret_props = &(ret_sa->proposals);
-	bool ok = false;
+	
 	UINT prop_count = LIST_NUM(sa->proposals);
 	Dbg("Iterating proposals: %u", prop_count);
 	for (UINT i = 0; i < prop_count; ++i) {
 		IKEv2_SA_PROPOSAL* proposal = (IKEv2_SA_PROPOSAL*)LIST_DATA(sa->proposals, i);
-		Debug("Proposal %u, %u transforms:\n", i, proposal->transform_number);
+		Dbg("Proposal %u, %u transforms:\n", i, proposal->transform_number);
 		for (UCHAR j = 0; j < proposal->transform_number; ++j) {
 			IKEv2_SA_TRANSFORM* transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(proposal->transforms, j);
-			Debug("\tTransform %u, type= %u, id = %u, attributes count = %u\n", j, transform->transform.type, transform->transform.ID, LIST_NUM(transform->attributes));
+			Dbg("\tTransform %u, type= %u, id = %u, attributes count = %u\n", j, transform->transform.type, transform->transform.ID, LIST_NUM(transform->attributes));
 		}
 	}
 
+	bool ok = false;
 	for (UINT i = 0; i < prop_count; ++i) {
 		IKEv2_SA_PROPOSAL* proposal = (IKEv2_SA_PROPOSAL*)LIST_DATA(sa->proposals, i);
 
 		Dbg("Check proposal with protocolID = %u", proposal->protocol_id);
 		if (proposal->protocol_id == protocol) {
-			Dbg("Protocol matched, OK");
-			bool ok_prop = true;
 			Dbg("Iterating through transforms, count = %u", proposal->transform_number);
+			bool ok_prop = true;
 			for (UCHAR j = 0; j < proposal->transform_number; ++j) {
 				IKEv2_SA_TRANSFORM* transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(proposal->transforms, j);
-				Dbg("Check transform for validness");
 				if (Ikev2IsValidTransformType(transform) == false) {
-					Dbg("Check failed, breaking");
+					Dbg("Check failed, transform is not valid, proposal rejected");
 					ok_prop = false;
 					break;
 				}
@@ -2539,7 +2526,6 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 			if (ok_prop == false){
 				continue;
 			}
-			Dbg("All transforms are valid, OK, getting transforms by type");
 			
 			bool isEncrPresent = Ikev2IsTransformPresent(proposal, IKEv2_TRANSFORM_TYPE_ENCR);
 			bool isPrfPresent = Ikev2IsTransformPresent(proposal, IKEv2_TRANSFORM_TYPE_PRF);
@@ -2553,7 +2539,6 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 			LIST* dh = Ikev2GetTransformsByType(ike->engine, proposal, IKEv2_TRANSFORM_TYPE_DH);
 			LIST* esn = Ikev2GetTransformsByType(ike->engine, proposal, IKEv2_TRANSFORM_TYPE_ESN);
 
-			Dbg("Transforms got, OK, calculating mandatory");
 			//MANDATORY: ENCR, PRF, INTEG, D-H
 			bool mandatory = false;
 			switch (protocol) {
@@ -2576,16 +2561,14 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 			}
 
 			if (mandatory) {
-				Dbg("Mandatory check passed");
 				*ret_props = NewList(NULL);
 
 				IKEv2_SA_PROPOSAL* prop = ZeroMalloc(sizeof(IKEv2_SA_PROPOSAL));
 				if (prop == NULL) {
-					Dbg("failed to allocate mem %d on iter %d\n", sizeof(IKEv2_SA_PROPOSAL), i);
+					Dbg("Failed to allocate mem IKEv2_SA_PROPOSAL on iter %u", i);
 					return NULL;
 				}
 
-				Dbg("Working with proposal to return");
 				Add(*ret_props, prop);
 				IKEv2_SA_PROPOSAL* cur_prop = (IKEv2_SA_PROPOSAL*)LIST_DATA(*ret_props, 0);
 
@@ -2611,10 +2594,8 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 				}
 				cur_prop->transforms = NewList(NULL);
 
-				Dbg("Working with setting...");
 				switch (protocol) {
 				case IKEv2_PROPOSAL_PROTOCOL_IKE: {
-					Dbg("Choosing random transforms");
 					IKEv2_SA_TRANSFORM* encr_transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(encr, Rand32() % LIST_NUM(encr));
 					IKEv2_SA_TRANSFORM* prf_transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(prf, Rand32() % LIST_NUM(prf));
 					IKEv2_SA_TRANSFORM* integ_transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(integ, Rand32() % LIST_NUM(integ));
@@ -2632,7 +2613,6 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 						Dbg("Got ENCR == NULL in SA choice, ERROR\n");
 					}
 					else {
-						Dbg("Setting key length");
 						Ikev2SetKeyLength(setting->encr, setting, encr_transform);
 					}
 					setting->prf = Ikev2GetPRF(ike->engine, prf_transform->transform.ID);
@@ -2644,13 +2624,11 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 						Dbg("Got INTEG == NULL in SA choice, ERROR\n");
 					}
 
-					Dbg("Get DH %u", LIST_NUM(dh));
 					setting->dh = Ikev2GetDH(ike->engine, dh_transform->transform.ID);
 					if (setting->dh == NULL) {
 						Dbg("Got DH == NULL in SA choice, ERROR\n");
 					}
 
-					Dbg("Cloning transforms to proposal");
 					Add(cur_prop->transforms, Ikev2CloneTransform(encr_transform));
 					Add(cur_prop->transforms, Ikev2CloneTransform(prf_transform));
 					Add(cur_prop->transforms, Ikev2CloneTransform(integ_transform));
@@ -2663,7 +2641,6 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 					Dbg("Got AH, wtf");
 					break;
 				case IKEv2_PROPOSAL_PROTOCOL_ESP: {
-					Dbg("Choosing random transforms");
 					IKEv2_SA_TRANSFORM* encr_transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(encr, Rand32() % LIST_NUM(encr));
 					IKEv2_SA_TRANSFORM* integ_transform = (LIST_NUM(integ) > 0) ? (IKEv2_SA_TRANSFORM*)LIST_DATA(integ, Rand32() % LIST_NUM(integ)) : NULL;
 					IKEv2_SA_TRANSFORM* dh_transform = (LIST_NUM(dh) > 0) ? (IKEv2_SA_TRANSFORM*)LIST_DATA(dh, Rand32() % LIST_NUM(dh)) : NULL;
@@ -2672,10 +2649,9 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 					UCHAR transform_count = 0;
 					setting->encr = Ikev2GetEncr(ike->engine, encr_transform->transform.ID);
 					if (setting->encr == NULL) {
-						Dbg("Got ENCR == NULL in SA choice, ERROR\n");
+						Dbg("Got ENCR == NULL in SA choice, ERROR");
 					}
 					else {
-						Dbg("Setting key length");
 						Ikev2SetKeyLength(setting->encr, setting, encr_transform);
 						transform_count++;
 					}
@@ -2684,7 +2660,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 						setting->integ = Ikev2GetInteg(ike->engine, integ_transform->transform.ID);
 						transform_count++;
 						if (setting->integ == NULL) {
-							Dbg("Got INTEG == NULL in SA choice, ERROR\n");
+							Dbg("Got INTEG == NULL in SA choice, ERROR");
 						}
 					}
 
@@ -2692,14 +2668,13 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 						setting->dh = Ikev2GetDH(ike->engine, dh_transform->transform.ID);
 						transform_count++;
 						if (setting->dh == NULL) {
-							Dbg("Got DH == NULL in SA choice, ERROR\n");
+							Dbg("Got DH == NULL in SA choice, ERROR");
 						}
 					}
 
 					setting->extended_esn = esn_transform->transform.ID == IKEv2_TRANSFORM_ID_ESN;
 					transform_count++;
 
-					Dbg("Editing proposal...");
 					Add(cur_prop->transforms, Ikev2CloneTransform(encr_transform));
 
 					if (integ != NULL) {
@@ -2721,8 +2696,6 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 				}
 			}
 
-			Dbg("Releasing all transforms");
-
 			ReleaseList(encr);
 			ReleaseList(prf);
 			ReleaseList(integ);
@@ -2730,7 +2703,6 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 			ReleaseList(esn);
 
 			if (ok == true) {
-				Dbg("SA found and set, OK");
 				break;
 			}
 		}

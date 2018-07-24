@@ -195,7 +195,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCP(IKEv2_CP_PAYLOAD *peer_conf, LIST* attribute
 
 IKEv2_PACKET* ParseIKEv2PacketHeader(UDPPACKET *p);
 IKEv2_PACKET *Ikev2ParsePacket(IKEv2_PACKET* p, void *data, UINT size, IKEv2_CRYPTO_PARAM* cparam);
-LIST* Ikev2ParsePayloadList(void *data, UINT size, UCHAR first_payload, UCHAR* next_last, bool fromBuf);
+LIST* Ikev2ParsePayloadList(void *data, UINT size, UCHAR first_payload, UCHAR* next_last);
 IKEv2_PACKET_PAYLOAD* Ikev2DecodePayload(UCHAR payload_type, BUF *buf);
 
 bool Ikev2IsSupportedPayload(UCHAR payload_type);

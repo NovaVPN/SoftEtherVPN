@@ -831,7 +831,7 @@ void FreeIPsecServer(IPSEC_SERVER *s)
 // Initialize the IPsec server
 IPSEC_SERVER *NewIPsecServer(CEDAR *cedar)
 {
-	Dbg("Starting ipsec server\n");
+	Dbg("Starting ipsec server");
 
 	IPSEC_SERVER *s;
 	// Validate arguments
@@ -849,11 +849,9 @@ IPSEC_SERVER *NewIPsecServer(CEDAR *cedar)
 	AddRef(s->Cedar->ref);
 
 	s->L2TP = NewL2TPServer(cedar);
-
-	Dbg("Creating new IKE server\n");
 	s->Ike = NewIKEServer(cedar, s);
 	
-	Dbg("Creating new IKEv2 server\n");
+	Dbg("Creating new IKEv2 server");
 	s->Ikev2 = NewIkev2Server(cedar, s);
 
 	StrCpy(s->Ike->Secret, sizeof(s->Ike->Secret), IPSEC_DEFAULT_SECRET);
