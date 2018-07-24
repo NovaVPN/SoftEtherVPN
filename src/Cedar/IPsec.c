@@ -250,7 +250,6 @@ UINT GetIKEVersion(UDPPACKET *p)
 // Processing of UDP packets (one by one)
 void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 {
-	Dbg("Processing new udp packet with size %u", p->Size);
 	L2TP_SERVER *l2tp;
 	IKE_SERVER *ike;
 	IKEv2_SERVER *ikev2;
@@ -290,7 +289,7 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 	}
 	else if (p->DestPort == IPSEC_PORT_IPSEC_ISAKMP)
 	{
-		Dbg("IKE PACKET DETECTED\n");
+		Dbg("IKE PACKET DETECTED");
 		if (p->Size >= 8 && IsZero(p->Data, 8))
 		{
 			// Truncate the Non-IKE Maker
@@ -306,15 +305,15 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 	}
 	else if (p->DestPort == IPSEC_PORT_IPSEC_ESP_RAW)
 	{
-		Dbg("Raw ESP PACKET DETECTED\n");
+		Dbg("Raw ESP PACKET DETECTED");
 		// Raw ESP
 		p->Type = IKE_UDP_TYPE_ESP;
 	}
 
-	Dbg("Processing udp packet with type %u", p->Type);
-
 	if (proc_this_packet)
 	{
+		Dbg("IPSec: processing new udp packet with size %u && type %u", p->Size, p->Type);
+
 		switch (p->DestPort)
 		{
 		case IPSEC_PORT_L2TP:
@@ -337,7 +336,7 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 					ProcessIKEv2PacketRecv(ikev2, p);
 					break;
 				default:
-					Dbg("Unknown ike packet, major version %u\n", ikeVersion);
+					Dbg("Unknown ike packet, major version %u", ikeVersion);
 					break;
 				}
 				break;
@@ -368,7 +367,7 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 	IKE_SERVER *ike;
 	IKEv2_SERVER *ikev2;
 	UINT64 now;
-	static UCHAR zero8[8] = {0, 0, 0, 0, 0, 0, 0, 0, };
+	static UCHAR zero8[8] = { 0, 0, 0, 0, 0, 0, 0, 0, };
 	// Validate arguments
 	if (u == NULL || packet_list == NULL)
 	{
@@ -427,16 +426,16 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 	ike->Now = now;
 	//ikev2->Now = now;
 
-  if (ipsec_disable == false)
-  {
-    // Process the received packet
-    for (i = 0;i < LIST_NUM(packet_list);i++)
-    {
-      UDPPACKET *p = LIST_DATA(packet_list, i);
-      Dbg("Recieeved IPSEC packet");
-      IPsecProcPacket(s, p);
-    }
-  }
+	if (ipsec_disable == false)
+	{
+		// Process the received packet
+		for (i = 0; i < LIST_NUM(packet_list); i++)
+		{
+			UDPPACKET *p = LIST_DATA(packet_list, i);
+			Dbg("\nRecieved IPSEC packet");
+			IPsecProcPacket(s, p);
+		}
+	}
 
 	// Interrupt processing of L2TP server
 	L2TPProcessInterrupts(l2tp);
@@ -449,7 +448,7 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 	ProcessIKEInterrupts(ike);
 
 	// UDP encapsulation process of IKE server packet scheduled for transmission
-	for (i = 0;i < LIST_NUM(ike->SendPacketList);i++)
+	for (i = 0; i < LIST_NUM(ike->SendPacketList); i++)
 	{
 		UDPPACKET *p = LIST_DATA(ike->SendPacketList, i);
 
@@ -475,6 +474,7 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 		}
 	}
 
+	// Postproc IKEv2 packets
 	for (i = 0; i < LIST_NUM(ikev2->SendPacketList); ++i)
 	{
 		UDPPACKET *p = LIST_DATA(ikev2->SendPacketList, i);

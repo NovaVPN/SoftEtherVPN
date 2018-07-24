@@ -227,6 +227,7 @@ void Ikev2FreeIPSECSA(IKEv2_IPSECSA* sa) {
 		return;
 	}
 
+	Dbg("Freeing CHILD_SA");
 	Ikev2FreeCryptoParam(sa->param);
 	Free(sa);
 }
@@ -236,6 +237,7 @@ void Ikev2FreeIKESA(IKEv2_SA* sa) {
 		return;
 	}
 
+	Dbg("Freeing IKE_SA");
 	Ikev2FreeCryptoParam(sa->param);
 
 	if (sa->nonce_i != NULL) {
@@ -1626,8 +1628,9 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 
 			goto end;
 		}
-
-		Dbg("CREATE_CHILD_SA: TSi && TSr are not synchronously present");
+		else {
+			Dbg("CREATE_CHILD_SA: error, TSi && TSr are not synchronously present");
+		}
 	}
 
 end:
@@ -3111,15 +3114,21 @@ void Ikev2DeleteIKESA(IKEv2_SERVER* ike, IKEv2_SA* sa) {
 	}
 
 	Dbg("Inside deleting IKE_SA");
+
+	LockList(ike->ipsec_SAs);
 	UINT child_count = LIST_NUM(ike->ipsec_SAs);
 	for (UINT i = 0; i < child_count; ++i) {
 		IKEv2_IPSECSA* child = (IKEv2_IPSECSA*)LIST_DATA(ike->ipsec_SAs, i);
 		if (child->ike_sa == sa) {
+			Dbg("Deleting child_sa of IKE_SA");
 			Delete(ike->ipsec_SAs, child);
 			Ikev2FreeIPSECSA(child);
+			
+			child_count--;
 			i--;
 		}
 	}
+	UnlockList(ike->ipsec_SAs);
 
 	Delete(ike->SAs, sa);
 	Ikev2FreeIKESA(sa);
@@ -3133,6 +3142,8 @@ bool Ikev2DeleteChildSA(IKEv2_SERVER* ike, IKEv2_SA* parent, UINT SPI) {
 	}
 
 	Dbg("Inside deleting CHILD_SA");
+	
+	LockList(ike->ipsec_SAs);
 	UINT sa_count = LIST_NUM(ike->ipsec_SAs);
 	for (UINT i = 0; i < sa_count; ++i) {
 		IKEv2_IPSECSA* sa = (IKEv2_IPSECSA*)LIST_DATA(ike->ipsec_SAs, i);
@@ -3140,10 +3151,13 @@ bool Ikev2DeleteChildSA(IKEv2_SERVER* ike, IKEv2_SA* parent, UINT SPI) {
 			Dbg("CHILD_SA found, freeing & deleting");
 			Delete(ike->ipsec_SAs, sa);
 			Ikev2FreeIPSECSA(sa);
+
+			UnlockList(ike->ipsec_SAs);
 			return true;
 		}
 	}
 
+	UnlockList(ike->ipsec_SAs);
 	Dbg("No child sa was deleted...");
 	return false;
 }
