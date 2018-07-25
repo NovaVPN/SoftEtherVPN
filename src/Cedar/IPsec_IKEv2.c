@@ -133,8 +133,11 @@ IKEv2_SA* Ikev2CreateSA(UINT64 SPIi, UINT64 SPIr, IKEv2_CRYPTO_SETTING* setting,
 	SA->param->key_data = key_data;
 
 	SA->client = NULL;
+	
 	SA->hasEstablished = false;
 	SA->isClosed = false;
+	SA->isRekeyed = false;
+
 	SA->succ_request = NULL;
 	SA->succ_response = NULL;
 	SA->nonce_i = NULL;
@@ -1530,7 +1533,7 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 				UCHAR* shared_key = ZeroMalloc(sizeof(UCHAR) * newSetting->dh->size); // g ^ ir
 				if (DhCompute(dh, shared_key, KE->key_data->Buf, KE->key_data->Size)) {
 					IKEv2_SA_PROPOSAL* prop = ((IKEv2_SA_PROPOSAL*)LIST_DATA(newSA->proposals, 0));
-					UINT64 newSPIi = *(UINT64*)(prop->SPI->Buf);
+					UINT64 newSPIi = ReadBufInt64(prop->SPI->Buf);//*(UINT64*)(prop->SPI->Buf);
 					UINT64 newSPIr = Ikev2CreateSPI(ike);
 					BUF* nonce_r = Ikev2GenerateNonce(newSetting->prf->key_size);
 					
@@ -1566,6 +1569,10 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 					IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_CREATE_CHILD_SA, true, false, false, packet->MessageId, sk_list);
 					Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, ikeSA->param);
 
+					ikeSA->isClosed = true;
+					ikeSA->isRekeyed = true;
+
+					Dbg("Creating new SA with SPIi %u, SPIr %u", newSPIi, newSPIr);					
 					IKEv2_SA* newSA = Ikev2CreateSA(newSPIi, newSPIr, newSetting, key_data);
 					newSA->client = ikeSA->client;
 					newSA->hasEstablished = true;
@@ -1573,6 +1580,16 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 					newSA->succ_response = CloneBuf(ikeSA->succ_response);
 					newSA->nonce_i = CloneBuf(ikeSA->nonce_i);
 					newSA->nonce_r = CloneBuf(ikeSA->nonce_r);
+
+					LockList(ike->ipsec_SAs);
+					UINT childSACount = LIST_NUM(ike->ipsec_SAs);
+					for (UINT i = 0; i < childSACount; ++i) {
+						IKEv2_IPSECSA* childSA = (IKEv2_IPSECSA*)LIST_DATA(ike->ipsec_SAs, i);
+						if (childSA->ike_sa == ikeSA) {
+							childSA->ike_sa = newSA;
+						}
+					}
+					UnlockList(ike->ipsec_SAs);
 					// TODO: problem with TSi/r, need to resolve
 
 					Add(ike->SAs, newSA);
@@ -3055,21 +3072,23 @@ void Ikev2DeleteIKESA(IKEv2_SERVER* ike, IKEv2_SA* sa) {
 
 	Dbg("Inside deleting IKE_SA");
 
-	LockList(ike->ipsec_SAs);
-	UINT child_count = LIST_NUM(ike->ipsec_SAs);
-	for (UINT i = 0; i < child_count; ++i) {
-		IKEv2_IPSECSA* child = (IKEv2_IPSECSA*)LIST_DATA(ike->ipsec_SAs, i);
-		if (child->ike_sa == sa) {
-			Dbg("Deleting child_sa of IKE_SA");
-			Delete(ike->ipsec_SAs, child);
-			Ikev2FreeIPSECSA(child);
-			
-			child_count--;
-			i--;
-		}
-	}
-	UnlockList(ike->ipsec_SAs);
+	if (sa->isRekeyed == false) {
+		LockList(ike->ipsec_SAs);
+		UINT child_count = LIST_NUM(ike->ipsec_SAs);
+		for (UINT i = 0; i < child_count; ++i) {
+			IKEv2_IPSECSA* child = (IKEv2_IPSECSA*)LIST_DATA(ike->ipsec_SAs, i);
+			if (child->ike_sa == sa) {
+				Dbg("Deleting child_sa of IKE_SA");
+				Delete(ike->ipsec_SAs, child);
+				Ikev2FreeIPSECSA(child);
 
+				child_count--;
+				i--;
+			}
+		}
+		UnlockList(ike->ipsec_SAs);
+	}
+	
 	Delete(ike->SAs, sa);
 	Ikev2FreeIKESA(sa);
 
@@ -3119,11 +3138,6 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 		return;
 	}
 
-	if (SA->isClosed == true) {
-		Dbg("Using closed IKE_SA, don't respond to it");
-		return;
-	}
-
 	IKEv2_CRYPTO_PARAM* param = SA->param;
 
 	IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, param);
@@ -3141,7 +3155,7 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 	IKEv2_SK_PAYLOAD* SKi = (IKEv2_SK_PAYLOAD*)pSKi->data;
 	LIST* payloads = SKi->decrypted_payloads;
 
-	Dbg("INFORMATIONAL: Payload count == %d\n", LIST_NUM(payloads));
+	Dbg("INFORMATIONAL: Payload count == %d", LIST_NUM(payloads));
 	if (LIST_NUM(payloads) == 0) {
 		Dbg("INFORMATIONAL: Got alive check, respond we are alive");
 
