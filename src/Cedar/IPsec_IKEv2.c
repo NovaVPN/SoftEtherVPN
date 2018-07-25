@@ -1533,7 +1533,7 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 				UCHAR* shared_key = ZeroMalloc(sizeof(UCHAR) * newSetting->dh->size); // g ^ ir
 				if (DhCompute(dh, shared_key, KE->key_data->Buf, KE->key_data->Size)) {
 					IKEv2_SA_PROPOSAL* prop = ((IKEv2_SA_PROPOSAL*)LIST_DATA(newSA->proposals, 0));
-					UINT64 newSPIi = ReadBufInt64(prop->SPI->Buf);//*(UINT64*)(prop->SPI->Buf);
+					UINT64 newSPIi = ReadBufInt64(prop->SPI);//*(UINT64*)(prop->SPI->Buf);
 					UINT64 newSPIr = Ikev2CreateSPI(ike);
 					BUF* nonce_r = Ikev2GenerateNonce(newSetting->prf->key_size);
 					
