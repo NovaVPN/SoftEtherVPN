@@ -108,6 +108,8 @@ typedef struct IKEv2_SA {
 	IKEv2_CRYPTO_PARAM* param;
 
 	bool hasEstablished;
+	bool isClosed;
+
 	BUF* succ_request;
 	BUF* succ_response;
 
@@ -123,6 +125,8 @@ typedef struct IKEv2_IPSECSA {
 	UINT SPI;
 	IKEv2_CRYPTO_PARAM* param;
 	IKEv2_SA* ike_sa;
+	
+	bool isClosed;
 } IKEv2_IPSECSA;
 
 typedef struct IKEv2_SERVER {

@@ -134,6 +134,7 @@ IKEv2_SA* Ikev2CreateSA(UINT64 SPIi, UINT64 SPIr, IKEv2_CRYPTO_SETTING* setting,
 
 	SA->client = NULL;
 	SA->hasEstablished = false;
+	SA->isClosed = false;
 	SA->succ_request = NULL;
 	SA->succ_response = NULL;
 	SA->nonce_i = NULL;
@@ -155,6 +156,7 @@ IKEv2_IPSECSA* Ikev2CreateIPsecSA(UINT SPI, IKEv2_SA* parent_IKESA, IKEv2_CRYPTO
 	IKEv2_IPSECSA* ret = ZeroMalloc(sizeof(IKEv2_IPSECSA));
 	ret->ike_sa = parent_IKESA;
 	ret->SPI = SPI;
+	ret->isClosed = false;
 	ret->param = ZeroMalloc(sizeof(IKEv2_CRYPTO_PARAM));
 	ret->param->key_data = key_data;
 	ret->param->setting = setting;
@@ -254,8 +256,6 @@ void Ikev2FreeIKESA(IKEv2_SA* sa) {
 	if (sa->succ_response != NULL) {
 		FreeBuf(sa->succ_response);
 	}
-
-	// Free client ?
 
 	if (sa->eap_sa != NULL) {
 		//ikev2_free_SA_payload(sa->eap_sa);
@@ -998,7 +998,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 	UINT64 SPIi = header->SPIi;
 	UINT64 SPIr = header->SPIr;
 
-	Dbg("getting IKE_SA with SPIs: %u, %u", SPIi, SPIr);
+	Dbg("Getting IKE_SA with SPIs: %u, %u", SPIi, SPIr);
 	IKEv2_SA* SA = Ikev2GetSABySPIAndClient(ike, SPIi, SPIr, NULL);
 	if (SA == NULL) {
 		Dbg("SA not found!");
@@ -1006,13 +1006,19 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 	}
 
 	if (SA->hasEstablished == true) {
+		// Auth already complete
+		return;
+	}
+
+	if (SA->isClosed == true) {
+		Dbg("Using closed IKE_SA, don't respond to it");
 		return;
 	}
 
 	IKEv2_CRYPTO_PARAM* param = SA->param;
 
 	Dbg("Auth: Parsing full packet");
-	IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, SA->param);
+	IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, param);
 	if (packet == NULL) {
 		Dbg("Corrupted packet, exiting SA_AUTH");
 		return;
@@ -1314,9 +1320,13 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 		return;
 	}
 
+	if (ikeSA->isClosed == true) {
+		Dbg("Using closed IKE_SA, don't respond to it");
+		return;
+	}
+
 	IKEv2_CRYPTO_PARAM* param = ikeSA->param;
 
-	Dbg("CREATE_CHILD_SA: Parsing full packet");
 	IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, ikeSA->param);
 	if (packet == NULL) {
 		Dbg("Corrupted packet, exiting CREATE_CHILD_SA");
@@ -1331,6 +1341,7 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 		IKEv2_PACKET_PAYLOAD* pSA = Ikev2GetPayloadByType(payloads, IKEv2_SA_PAYLOAD_T, 0);
 		IKEv2_PACKET_PAYLOAD* pNonce = Ikev2GetPayloadByType(payloads, IKEv2_NONCE_PAYLOAD_T, 0);
 		IKEv2_PACKET_PAYLOAD* pKE = Ikev2GetPayloadByType(payloads, IKEv2_KE_PAYLOAD_T, 0);
+		// Traffic selectors are not saved anywhere for now
 		IKEv2_PACKET_PAYLOAD* pTSi = Ikev2GetPayloadByType(payloads, IKEv2_TSi_PAYLOAD_T, 0);
 		IKEv2_PACKET_PAYLOAD* pTSr = Ikev2GetPayloadByType(payloads, IKEv2_TSr_PAYLOAD_T, 0);
 
@@ -1362,9 +1373,7 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 				goto end;
 			}
 
-			Dbg("Continue rekeying");
 			IKEv2_SA_PAYLOAD* SAr = (IKEv2_SA_PAYLOAD*)(chosenSA->data);
-			Dbg("SAr set");
 			UCHAR* shared_secret = NULL;
 			DH_CTX* dh = NULL;
 			if (KE != NULL) {
@@ -1395,10 +1404,8 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 				}
 			}
 
-			Dbg("Calculating nonce");
 			IKEv2_PRF* curPrf = (newSetting->prf == NULL) ? param->setting->prf : newSetting->prf;
 			BUF* nonce_r = Ikev2GenerateNonce(curPrf->key_size);
-			Dbg("Calculating key_data");
 			IKEv2_CRYPTO_KEY_DATA* key_data = (shared_secret == NULL) ?
 				IKEv2CreateKeymatWithoutDHForChildSA(curPrf, param->key_data->sk_d, nonce, nonce_r, newSetting->key_size, newSetting->integ->key_size) :
 				IKEv2CreateKeymatWithDHForChildSA(curPrf, param->key_data->sk_d, shared_secret, nonce, nonce_r, newSetting->key_size, newSetting->integ->key_size);
@@ -1420,7 +1427,6 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 			IKEv2_PACKET_PAYLOAD* KEr = (KE == NULL) ? NULL : Ikev2CreateKE(newSetting->dh->type, dh->MyPublicKey);
 			IKEv2_PACKET_PAYLOAD* Nr = Ikev2CreateNonce(nonce_r);
 
-			Dbg("Preparing list to send");
 			LIST* send_list = NewListFast(NULL);
 			Add(send_list, chosenSA);
 			if (KEr != NULL) {
@@ -1430,11 +1436,9 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 			Add(send_list, pTSi);
 			Add(send_list, pTSr);
 
-			Dbg("Creating SK");
 			IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(send_list, param);
 			LIST* sk_list = NewListSingle(sk);
 
-			Dbg("Sending packet");
 			IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_CREATE_CHILD_SA, true, false, false, packet->MessageId, sk_list);
 			Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, ikeSA->param);
 
@@ -1466,14 +1470,11 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 					goto free_end;
 				}
 
-				Dbg("Child is not null");
-				// Proposal has different SPI field value?
-				child->SPI = newSPI;
-				Ikev2FreeCryptoParam(child->param);
-
-				child->param = ZeroMalloc(sizeof(IKEv2_CRYPTO_PARAM));
-				child->param->key_data = key_data;
-				child->param->setting = newSetting;
+				Dbg("Child is not null, adding new CHILD_SA to list");
+				
+				child->isClosed = true;
+				IKEv2_IPSECSA* newChild = Ikev2CreateIPsecSA(newSPI, ikeSA, key_data, newSetting);
+				Add(ike->ipsec_SAs, newChild);
 			}
 			else {
 				Dbg("Creating & adding new ipsec_sa");
@@ -1519,7 +1520,6 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 			}
 
 			IKEv2_SA_PAYLOAD* newSA = ((IKEv2_SA_PAYLOAD*)chosenSA->data);
-			Dbg("Creating DH_CTX");
 			DH_CTX* dh = Ikev2CreateDH_CTX(newSetting->dh);
 			if (dh == NULL) {
 				Dbg("DH_CTX creation failure");
@@ -1528,15 +1528,12 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 			}
 			else {
 				UCHAR* shared_key = ZeroMalloc(sizeof(UCHAR) * newSetting->dh->size); // g ^ ir
-				Dbg("key data size: %u", KE->key_data->Size);
 				if (DhCompute(dh, shared_key, KE->key_data->Buf, KE->key_data->Size)) {
-					DbgPointer("Shared key", shared_key, newSetting->dh->size);
 					IKEv2_SA_PROPOSAL* prop = ((IKEv2_SA_PROPOSAL*)LIST_DATA(newSA->proposals, 0));
 					UINT64 newSPIi = *(UINT64*)(prop->SPI->Buf);
 					UINT64 newSPIr = Ikev2CreateSPI(ike);
 					BUF* nonce_r = Ikev2GenerateNonce(newSetting->prf->key_size);
-					DbgBuf("Nonce_r", nonce_r);
-
+					
 					IKEv2_CRYPTO_KEY_DATA* key_data =
 						IKEv2GenerateKeymatForIKESA(newSetting, nonce->nonce, nonce_r, shared_key,
 							newSetting->dh->size, SPIi, SPIr, param->key_data->sk_d, param->key_data->prf_key_size, false);
@@ -1551,8 +1548,6 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 						goto end;
 					}
 
-					Dbg("continue: key data size: %u", KE->key_data->Size);
-
 					IKEv2_PACKET_PAYLOAD* KEr = Ikev2CreateKE(newSetting->dh->type, dh->MyPublicKey);
 					IKEv2_PACKET_PAYLOAD* Nr = Ikev2CreateNonce(nonce_r);
 
@@ -1566,21 +1561,21 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 					Add(send_list, Nr);
 
 					IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(send_list, param);
-					//((IKEv2_SK_PAYLOAD*)sk->data)->integ_len = param->setting->integ->out_size;
-
 					LIST* sk_list = NewListSingle(sk);
 
 					IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_CREATE_CHILD_SA, true, false, false, packet->MessageId, sk_list);
 					Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, ikeSA->param);
 
-					ikeSA->SPIi = newSPIi;
-					ikeSA->SPIr = newSPIr;
+					IKEv2_SA* newSA = Ikev2CreateSA(newSPIi, newSPIr, newSetting, key_data);
+					newSA->client = ikeSA->client;
+					newSA->hasEstablished = true;
+					newSA->succ_request = CloneBuf(ikeSA->succ_request);
+					newSA->succ_response = CloneBuf(ikeSA->succ_response);
+					newSA->nonce_i = CloneBuf(ikeSA->nonce_i);
+					newSA->nonce_r = CloneBuf(ikeSA->nonce_r);
+					// TODO: problem with TSi/r, need to resolve
 
-					Ikev2FreeCryptoParam(ikeSA->param);
-
-					ikeSA->param = ZeroMalloc(sizeof(IKEv2_CRYPTO_PARAM));
-					ikeSA->param->key_data = key_data;
-					ikeSA->param->setting = newSetting;
+					Add(ike->SAs, newSA);
 
 					FreeBuf(nonce_r);
 					Ikev2FreePayload(chosenSA);
@@ -2499,10 +2494,10 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 	Dbg("Iterating proposals: %u", prop_count);
 	for (UINT i = 0; i < prop_count; ++i) {
 		IKEv2_SA_PROPOSAL* proposal = (IKEv2_SA_PROPOSAL*)LIST_DATA(sa->proposals, i);
-		Dbg("Proposal %u, %u transforms:\n", i, proposal->transform_number);
+		Debug("Proposal %u, %u transforms:\n", i, proposal->transform_number);
 		for (UCHAR j = 0; j < proposal->transform_number; ++j) {
 			IKEv2_SA_TRANSFORM* transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(proposal->transforms, j);
-			Dbg("\tTransform %u, type= %u, id = %u, attributes count = %u\n", j, transform->transform.type, transform->transform.ID, LIST_NUM(transform->attributes));
+			Debug("\tTransform %u, type= %u, id = %u, attributes count = %u\n", j, transform->transform.type, transform->transform.ID, LIST_NUM(transform->attributes));
 		}
 	}
 
@@ -2512,7 +2507,6 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 
 		Dbg("Check proposal with protocolID = %u", proposal->protocol_id);
 		if (proposal->protocol_id == protocol) {
-			Dbg("Iterating through transforms, count = %u", proposal->transform_number);
 			bool ok_prop = true;
 			for (UCHAR j = 0; j < proposal->transform_number; ++j) {
 				IKEv2_SA_TRANSFORM* transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(proposal->transforms, j);
@@ -3109,43 +3103,47 @@ bool Ikev2DeleteChildSA(IKEv2_SERVER* ike, IKEv2_SA* parent, UINT SPI) {
 }
 
 void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET *p) {
-	if (ike == NULL || p == NULL) {
+	if (header == NULL || ike == NULL || p == NULL) {
 		return;
 	}
 
-	Dbg("[informational] init");
+	Dbg("INFORMATIONAL started");
 
 	UINT64 SPIi = header->SPIi;
 	UINT64 SPIr = header->SPIr;
 
-	Dbg("[informational] getting IKE_SA with SPIs: %u, %u", SPIi, SPIr);
+	Dbg("INFORMATIONAL: getting IKE_SA with SPIs: %u, %u", SPIi, SPIr);
 	IKEv2_SA* SA = Ikev2GetSABySPIAndClient(ike, SPIi, SPIr, NULL);
 	if (SA == NULL) {
-		Dbg("[informational] SA not found!");
+		Dbg("IKE_SA is not found!");
 		return;
 	}
 
-	IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, SA->param);
-	if (packet == NULL) {
-		Dbg("[informational] can't parse packet");
+	if (SA->isClosed == true) {
+		Dbg("Using closed IKE_SA, don't respond to it");
 		return;
 	}
-	Dbg("[informational] packet parsed");
 
 	IKEv2_CRYPTO_PARAM* param = SA->param;
+
+	IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, param);
+	if (packet == NULL) {
+		Dbg("Can't parse packet");
+		return;
+	}
+	
 	IKEv2_PACKET_PAYLOAD* pSKi = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_SK_PAYLOAD_T, 0);
 	if (pSKi == NULL) {
-		Dbg("[informational] can't found SK payload");
+		Dbg("Can't found SK payload");
 		return;
 	}
 
 	IKEv2_SK_PAYLOAD* SKi = (IKEv2_SK_PAYLOAD*)pSKi->data;
 	LIST* payloads = SKi->decrypted_payloads;
 
-	Debug("[Informational] Payload count == %d\n", LIST_NUM(payloads));
-
+	Dbg("INFORMATIONAL: Payload count == %d\n", LIST_NUM(payloads));
 	if (LIST_NUM(payloads) == 0) {
-		Dbg("[Informational] Got alive check, respond we are alive");
+		Dbg("INFORMATIONAL: Got alive check, respond we are alive");
 
 		LIST* empty = NewListFast(NULL);
 		IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(empty, param);
@@ -3167,7 +3165,7 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 	for (UINT i = 0; i < pay_count; ++i) {
 		IKEv2_PACKET_PAYLOAD* pDel = (IKEv2_PACKET_PAYLOAD*)LIST_DATA(delete_payloads, i);
 		IKEv2_DELETE_PAYLOAD* del = (IKEv2_DELETE_PAYLOAD*)pDel->data;
-		Dbg("[Informational] Delete: proto id: %u, spi size %u, num_spi: %u", del->protocol_id, del->spi_size, del->num_spi);
+		Dbg("INFORMATIONAL: deleting proto id: %u, spi size %u, num_spi: %u", del->protocol_id, del->spi_size, del->num_spi);
 
 		switch (del->protocol_id) {
 		case IKEv2_DELETE_PROTO_IKE:
@@ -3200,7 +3198,7 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 	IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, SPIr, IKEv2_INFORMATIONAL, true, false, false, packet->MessageId, sk_list);
 	Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, param);
 
-	Dbg("Freeing informational exchange");
+	Dbg("INFORMATIONAL: Freeing informational exchange");
 	Ikev2FreePacket(np);
 	ReleaseList(to_send);
 
