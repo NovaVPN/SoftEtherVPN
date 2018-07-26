@@ -1907,6 +1907,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2DecodePayload(UCHAR payload_type, BUF *buf) {
 		payload->BitArray = CloneBuf(buf);
 	}
 	else {
+		Dbg("Error occured");
 		if (payload != NULL && payload->data != NULL) {
 			Free(payload->data);
 			payload->data = NULL;

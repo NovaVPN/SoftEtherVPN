@@ -774,7 +774,7 @@ UINT ikev2_configuration_decode(BUF *b, IKEv2_CP_PAYLOAD *p) {
 	}
 
 	for (UINT i = 0; i < remains;) {
-		IKEv2_CP_ATTR* attr = (IKEv2_CP_ATTR*)ZeroMalloc(sizeof(IKEv2_CP_ATTR*));
+		IKEv2_CP_ATTR* attr = (IKEv2_CP_ATTR*)ZeroMalloc(sizeof(IKEv2_CP_ATTR));
 
 		attr->type = ReadBufShort(b) & ((1 << 15) - 1);
 		/* if (attr->type < 1 || attr->type > 15) { */
