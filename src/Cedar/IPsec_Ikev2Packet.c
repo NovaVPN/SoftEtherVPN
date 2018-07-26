@@ -762,41 +762,41 @@ BUF* ikev2_configuration_encode(IKEv2_CP_PAYLOAD *p) {
 }
 
 UINT ikev2_configuration_decode(BUF *b, IKEv2_CP_PAYLOAD *p) {
-  p->type = ReadBufChar(b);
-  ReadBufChar(b);
-  ReadBufShort(b);
+	p->type = ReadBufChar(b);
+	ReadBufChar(b);
+	ReadBufShort(b);
 
-  p->attributes = NewList(NULL);
+	p->attributes = NewList(NULL);
 
-  UINT remains = ReadBufRemainSize(b);
-  if (remains < 4) {
-    return IKEv2_INVALID_SYNTAX;
-  }
+	UINT remains = ReadBufRemainSize(b);
+	if (remains < 4) {
+		return IKEv2_INVALID_SYNTAX;
+	}
 
-  for (UINT i = 0; i < remains;) {
-    IKEv2_CP_ATTR* attr = (IKEv2_CP_ATTR*)ZeroMalloc(sizeof(IKEv2_CP_ATTR*));
+	for (UINT i = 0; i < remains;) {
+		IKEv2_CP_ATTR* attr = (IKEv2_CP_ATTR*)ZeroMalloc(sizeof(IKEv2_CP_ATTR*));
 
-    attr->type = ReadBufShort(b)&(1<<15);
-    /* if (attr->type < 1 || attr->type > 15) { */
-    /* return IKEv2_INVALID_SYNTAX; */
-    /* } */
+		attr->type = ReadBufShort(b) & ((1 << 15) - 1);
+		/* if (attr->type < 1 || attr->type > 15) { */
+		/* return IKEv2_INVALID_SYNTAX; */
+		/* } */
 
-    attr->length = ReadBufShort(b);
-    i+= 4;
-    if (attr->length == 0) {
-      continue;
-    }
-    attr->value = ReadBufFromBuf(b, attr->length);
+		attr->length = ReadBufShort(b);
+		i += 4;
+		if (attr->length > 0) {
+			attr->value = ReadBufFromBuf(b, attr->length);
 
-    i += attr->length;
-    if (i >= remains) {
-      return IKEv2_INVALID_SYNTAX;
-    }
+			i += attr->length;
+		}
 
-    Add(p->attributes, attr);
-  }
+		if (i > remains) {
+			return IKEv2_INVALID_SYNTAX;
+		}
 
-  return IKEv2_NO_ERROR;
+		Add(p->attributes, attr);
+	}
+
+	return IKEv2_NO_ERROR;
 }
 
 void ikev2_free_configuration_payload(IKEv2_CP_PAYLOAD *p) {

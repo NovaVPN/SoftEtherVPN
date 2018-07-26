@@ -750,6 +750,8 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		goto end;
 	}
 
+	Dbg("Packet parsed");
+
 	UINT64 SPIi = packet->SPIi;
 	if (Ikev2HasAlreadyInit(ike, SPIi, p) == true) {
 		// retransmitted sa_init, exit
