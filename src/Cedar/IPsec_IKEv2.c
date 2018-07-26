@@ -869,6 +869,9 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		}
 
 		IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_SA_INIT, true, false, false, packet->MessageId, send_list);
+		if (cp != NULL) {
+			Delete(send_list, cp);
+		}
 		Ikev2SendPacket(ike, client, to_send, NULL);
 		newSA->succ_response = CloneBuf(to_send->ByteMsg);
 
