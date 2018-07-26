@@ -736,29 +736,33 @@ void ikev2_free_SK_payload(IKEv2_SK_PAYLOAD *p) {
 
 /*          CONFIGURATION PAYLOAD                     */
 BUF* ikev2_configuration_encode(IKEv2_CP_PAYLOAD *p) {
-  if (p == NULL) {
-    return NULL;
-  }
-  BUF* b = NewBuf();
-  WriteBufChar(b, p->type);
-  WriteBufChar(b, 0);
-  WriteBufShort(b, (USHORT)0);
+	if (p == NULL) {
+		return NULL;
+	}
 
-  for (UINT i = 0; i < LIST_NUM(p->attributes); i++) {
-    BUF *tmp = NewBuf();
-    /* IKEv2_CP_ATTR *a = (IKEv2_CP_ATTR*) ZeroMalloc(sizeof(IKEv2_CP_ATTR)); */
-    IKEv2_CP_ATTR *a = LIST_DATA(p->attributes, i);
+	BUF* b = NewBuf();
+	WriteBufChar(b, p->type);
+	WriteBufChar(b, 0);
+	WriteBufShort(b, (USHORT)0);
 
-    WriteBufShort(tmp, a->type);
-    WriteBufShort(tmp, a->length);
+	UINT attrCount = LIST_NUM(p->attributes);
+	for (UINT i = 0; i < attrCount; ++i) {
+		IKEv2_CP_ATTR* a = (IKEv2_CP_ATTR*)LIST_DATA(p->attributes, i);
 
-    WriteBufBuf(tmp, a->value);
+		BUF *tmp = NewBuf();
+		
+		WriteBufShort(tmp, a->type);
+		WriteBufShort(tmp, a->length);
 
-    WriteBufBuf(b, tmp);
-    FreeBuf(tmp);
-  }
+		if (a->value != NULL) {
+			WriteBufBuf(tmp, a->value);
+		}
+		
+		WriteBufBuf(b, tmp);
+		FreeBuf(tmp);
+	}
 
-  return b;
+	return b;
 }
 
 UINT ikev2_configuration_decode(BUF *b, IKEv2_CP_PAYLOAD *p) {
@@ -806,7 +810,9 @@ void ikev2_free_configuration_payload(IKEv2_CP_PAYLOAD *p) {
 
 	for (UINT i = 0; i < LIST_NUM(p->attributes); ++i) {
 		IKEv2_CP_ATTR* attr = LIST_DATA(p->attributes, i);
-		FreeBuf(attr->value);
+		if (attr->value != NULL) {
+			FreeBuf(attr->value);
+		}
 		Free(attr);
 		attr = NULL;
 	}
