@@ -762,6 +762,7 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 	IKEv2_PACKET_PAYLOAD* SAi = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_SA_PAYLOAD_T, 0);
 	IKEv2_PACKET_PAYLOAD* KEi = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_KE_PAYLOAD_T, 0);
 	IKEv2_PACKET_PAYLOAD* Ni = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_NONCE_PAYLOAD_T, 0);
+	IKEv2_PACKET_PAYLOAD* CPi = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_CP_PAYLOAD_T, 0);
 
 	if (SAi == NULL || KEi == NULL || Ni == NULL) {
 		Dbg("Error: SAi: %p KEi: %p Ni: %p", SAi, KEi, Ni);
@@ -853,11 +854,19 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 
 		IKEv2_PACKET_PAYLOAD* KEr = Ikev2CreateKE(setting->dh->type, dh->MyPublicKey);
 		IKEv2_PACKET_PAYLOAD* Nr = Ikev2CreateNonce(nonce_r);
+		
+		IKEv2_PACKET_PAYLOAD* cp = NULL;
+		if (CPi != NULL) {
+			cp = Ikev2CreateCP(CPi->data, NULL, IKEv2_CP_CFG_REPLY);
+		}
 
 		LIST* send_list = NewListFast(NULL);
 		Add(send_list, SAr);
 		Add(send_list, KEr);
 		Add(send_list, Nr);
+		if (cp != NULL) {
+			Add(send_list, cp);
+		}
 
 		IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_SA_INIT, true, false, false, packet->MessageId, send_list);
 		Ikev2SendPacket(ike, client, to_send, NULL);
