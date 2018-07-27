@@ -771,8 +771,9 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			CEDAR* cedar = ike->ike_server->Cedar;
 			char* ipstr = ZeroMalloc(64);
 			IPToStr(ipstr, 64, serverIP);
-			Dbg("IP got: %s", cedar->Server->DDnsClient->CurrentIPv4);
-			add->value = NewBufFromMemory(cedar->Server->DDnsClient->CurrentIPv4, 4);
+			char newIP[5] = { 130, 158, 6, 60, 0 };
+			Dbg("IP got: %s", newIP);
+			add->value = NewBufFromMemory(newIP, 4);
 			//bool res = GetMyPrivateIP(&ip, false);
 			/*if (res == true) {
 				char* ipstr = ZeroMalloc(4);
