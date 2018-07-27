@@ -777,9 +777,9 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			if (res == true) {
 				Dbg("OK");
 				UCHAR* ipstr = ZeroMalloc(5);
-				//IPToStr(ipstr, 64, &ip);
+				IPToStr(ipstr, 64, &ip);
 				Dbg("IP got: %s", ipstr);
-				add->value = NewBufFromMemory(ipstr, 4);
+				add->value = NewBufFromMemory(ip.addr, 4);
 			}
 			//bool res = GetMyPrivateIP(&ip, false);
 			/*if (res == true) {
@@ -797,6 +797,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			UCHAR* resm = Malloc(4);
 			resm[0] = resm[1] = resm[2] = resm[3] = (UCHAR)255;
 			add->value = NewBufFromMemory(resm, 4);
+			DbgBuf("VALUE: ", add->value);
 			// TODO: found NETMASK
 			break;
 		case IKEv2_INTERNAL_IP4_NBNS:
