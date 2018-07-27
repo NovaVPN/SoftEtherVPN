@@ -769,13 +769,11 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			}
 			add->length = 4;
 			CEDAR* cedar = ike->ike_server->Cedar;
-			char* hostname = cedar->MachineName;
-			Dbg("Hostname: %s", hostname);
 			IP ip;
-			bool res = GetIP(&ip, hostname);
+			bool res = GetMyPrivateIP(&ip, false);
 			if (res == true) {
 				char* ipstr = ZeroMalloc(4);
-				IPToStr(ipstr, 4, &ip);
+				IPToStr(ipstr, 64, &ip);
 				Dbg("IP got: %s", ipstr);
 				add->value = NewBufFromMemory(ip.addr, 4);
 			}
