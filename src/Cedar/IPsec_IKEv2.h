@@ -215,7 +215,7 @@ IKEv2_IPSECSA* Ikev2GetIPSECSA(IKEv2_SERVER* server, IKEv2_SA* ike_sa, UINT SPI)
 BUF* Ikev2Encrypt(void* data, UINT size, IKEv2_CRYPTO_PARAM *cparam);
 BUF* Ikev2Decrypt(void* data, UINT size, IKEv2_CRYPTO_PARAM *cparam);
 
-IKEv2_CRYPTO_KEY_DATA* IKEv2GenerateKeymatForIKESA(IKEv2_CRYPTO_SETTING* setting, BUF *nonce_i, BUF *nonce_r,
+IKEv2_CRYPTO_KEY_DATA* IKEv2GenerateKeymatForIKESA(IKEv2_CRYPTO_SETTING* setting, IKEv2_PRF* prf, BUF *nonce_i, BUF *nonce_r,
 	UCHAR *shared_key, UINT key_len, UINT64 SPIi, UINT64 SPIr, void* sk_d, UINT len_sk_d, bool isInitial);
 
 DH_CTX* Ikev2CreateDH_CTX(IKEv2_DH* dh);
