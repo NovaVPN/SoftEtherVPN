@@ -736,7 +736,7 @@ IKEv2_NOTIFY_PAYLOAD* Ikev2GetNotifyByType(LIST* payloads, USHORT type) {
 	return NULL;
 }
 
-IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* req) {
+IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* req, IP* serverIP) {
 	if (req == NULL) {
 		return NULL;
 	}
@@ -769,11 +769,10 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			}
 			add->length = 4;
 			CEDAR* cedar = ike->ike_server->Cedar;
-			IP* ip = &(cedar->Server->ListenIP);
 			char* ipstr = ZeroMalloc(64);
-			IPToStr(ipstr, 64, &ip);
+			IPToStr(ipstr, 64, serverIP);
 			Dbg("IP got: %s", ipstr);
-			add->value = NewBufFromMemory(ip->addr, 4);
+			add->value = NewBufFromMemory(serverIP->addr, 4);
 			//bool res = GetMyPrivateIP(&ip, false);
 			/*if (res == true) {
 				char* ipstr = ZeroMalloc(4);
@@ -1325,7 +1324,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 											Add(send_list, auth_r);
 											
 											IKEv2_PACKET_PAYLOAD* cp = (cpg->type == IKEv2_CP_CFG_REQUEST) ?
-																Ikev2CreateCPReply(ike, cpg) : NULL;
+																Ikev2CreateCPReply(ike, cpg, &p->DstIP) : NULL;
 											if (cp != NULL) {
 												Add(send_list, cp);
 											}
