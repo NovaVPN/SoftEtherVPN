@@ -1184,6 +1184,11 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 				IKEv2_TS_PAYLOAD* TSr = pTSr->data;
 
 				BUF* id_data = ikev2_ID_encode(IDi);
+				Dbg("IDi: %s", (UCHAR*)(IDi->data->Buf));
+				if (IDr != NULL) {
+					Dbg("IDi: %s", (UCHAR*)(IDr->data->Buf));
+				}
+
 				BUF* auth_i_integ = AUTHi->data;
 				if (AUTHi->auth_method != IKEv2_AUTH_SHARED_KEY_MESSAGE_INTEGRITY_CODE) {
 					Dbg("Auth method = %u is not supported, exiting", AUTHi->auth_method);
