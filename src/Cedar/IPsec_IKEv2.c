@@ -1041,13 +1041,6 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 		return;
 	}
 
-	Dbg("Got payloads:");
-	UINT cn = LIST_NUM(packet->PayloadList);
-	for (UINT i = 0; i < cn; ++i) {
-		Debug("%u ", ((IKEv2_PACKET_PAYLOAD*)LIST_DATA(packet->PayloadList, i))->PayloadType);
-	}
-	Debug("%\n");
-
 	IKEv2_PACKET_PAYLOAD* pSKi = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_SK_PAYLOAD_T, 0);
 	if (pSKi != NULL) {
 		Dbg("Found SK payload, OK");
@@ -1058,12 +1051,12 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 		bool is_tfc_padding = Ikev2GetNotifyByType(payloads, IKEv2_ESP_TFC_PADDING_NOT_SUPPORTED) != NULL;
 		bool is_non_first_fragments = Ikev2GetNotifyByType(payloads, IKEv2_NON_FIRST_FRAGMENTS_ALSO) != NULL; // not supported
 
-		Dbg("Got decrypted payloads:");
-		UINT cn = LIST_NUM(payloads);
-		for (UINT i = 0; i < cn; ++i) {
-			Debug("%u ", ((IKEv2_PACKET_PAYLOAD*)LIST_DATA(payloads, i))->PayloadType);
-		}
-		Debug("%\n");
+		//Dbg("Got decrypted payloads:");
+		//UINT cn = LIST_NUM(payloads);
+		//for (UINT i = 0; i < cn; ++i) {
+		//	Debug("%u ", ((IKEv2_PACKET_PAYLOAD*)LIST_DATA(payloads, i))->PayloadType);
+		//}
+		//Debug("%\n");
 
 		IKEv2_PACKET_PAYLOAD* pIDi = Ikev2GetPayloadByType(payloads, IKEv2_IDi_PAYLOAD_T, 0);
 		IKEv2_PACKET_PAYLOAD* pIDr = Ikev2GetPayloadByType(payloads, IKEv2_IDr_PAYLOAD_T, 0);
@@ -1184,12 +1177,12 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 				IKEv2_TS_PAYLOAD* TSr = pTSr->data;
 
 				BUF* id_data = ikev2_ID_encode(IDi);
-				Dbg("IDi: type %u, size %u", IDi->ID_type, IDi->data->Size);
+				/*Dbg("IDi: type %u, size %u", IDi->ID_type, IDi->data->Size);
 				DbgBuf("IDi: ", IDi->data);
 				if (IDr != NULL) {
 					Dbg("IDr: type %u, %u", IDr->ID_type, IDr->data->Size);
 					DbgBuf("IDr: ", IDr->data);
-				}
+				}*/
 
 				BUF* auth_i_integ = AUTHi->data;
 				if (AUTHi->auth_method != IKEv2_AUTH_SHARED_KEY_MESSAGE_INTEGRITY_CODE) {
@@ -1203,8 +1196,8 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 						Dbg("Signed octets computed with len=%u, OK", signed_octets_i->Size);
 						//DbgPointer("PSK", ike->ike_server->Secret, strlen(ike->ike_server->Secret));
 						BUF* auth_i_calced = IKEv2CalcAuth(param->setting->prf, ike->ike_server->Secret, strlen(ike->ike_server->Secret), "Key Pad for IKEv2", 17, signed_octets_i);
-						DbgBuf("auth_i_calced", auth_i_calced);
-						DbgBuf("auth_i_integ", auth_i_integ);
+						//DbgBuf("auth_i_calced", auth_i_calced);
+						//DbgBuf("auth_i_integ", auth_i_integ);
 
 						if (auth_i_calced != NULL && auth_i_calced->Size == auth_i_integ->Size &&
 							(Cmp(auth_i_calced->Buf, auth_i_integ->Buf, auth_i_integ->Size) == 0)) {
@@ -3372,10 +3365,8 @@ bool IKEv2SetKeymatFromSKEYSEED(IKEv2_CRYPTO_KEY_DATA* key_data, IKEv2_PRF* prf,
 	UINT64 EndianSPIr = Endian64(SPIr);
 	Copy(newText + nonce_sum_size, &EndianSPIi, 8);
 	Copy(newText + nonce_sum_size + 8, &EndianSPIr, 8);
-	DbgPointer("PRF+ seed", newText, nonce_sum_size + 16);
-
+	
 	UINT needed_size = 3 * prf->key_size + 2 * key_data->encr_key_size + 2 * key_data->integ_key_size;
-	Dbg("Calc PRF Plus");
 	UCHAR* keying_mat = Ikev2CalcPRFplus(prf, skeyseed, key_data->prf_key_size, newText, nonce_sum_size + 16, needed_size);
 	Free(newText);
 	
@@ -3384,35 +3375,34 @@ bool IKEv2SetKeymatFromSKEYSEED(IKEv2_CRYPTO_KEY_DATA* key_data, IKEv2_PRF* prf,
 		return false;
 	}
 
-	DbgPointer("Keying material", keying_mat, needed_size);
 	Dbg("Saving keying mat");
 	key_data->sk_d = keying_mat;
-	DbgPointer("sk_d", key_data->sk_d, key_data->prf_key_size);
+	//DbgPointer("sk_d", key_data->sk_d, key_data->prf_key_size);
 
 	UINT offset = 0;
 	offset += key_data->prf_key_size;
 	key_data->sk_ai = keying_mat + offset;
-	DbgPointer("sk_ai", key_data->sk_ai, key_data->integ_key_size);
+	//DbgPointer("sk_ai", key_data->sk_ai, key_data->integ_key_size);
 
 	offset += key_data->integ_key_size;
 	key_data->sk_ar = keying_mat + offset;
-	DbgPointer("sk_ar", key_data->sk_ar, key_data->integ_key_size);
+	//DbgPointer("sk_ar", key_data->sk_ar, key_data->integ_key_size);
 
 	offset += key_data->integ_key_size;
 	key_data->sk_ei = keying_mat + offset;
-	DbgPointer("sk_ei", key_data->sk_ei, key_data->encr_key_size);
+	//DbgPointer("sk_ei", key_data->sk_ei, key_data->encr_key_size);
 
 	offset += key_data->encr_key_size;
 	key_data->sk_er = keying_mat + offset;
-	DbgPointer("sk_er", key_data->sk_er, key_data->encr_key_size);
+	//DbgPointer("sk_er", key_data->sk_er, key_data->encr_key_size);
 
 	offset += key_data->encr_key_size;
 	key_data->sk_pi = keying_mat + offset;
-	DbgPointer("sk_pi", key_data->sk_pi, key_data->prf_key_size);
+	//DbgPointer("sk_pi", key_data->sk_pi, key_data->prf_key_size);
 
 	offset += key_data->prf_key_size;
 	key_data->sk_pr = keying_mat + offset;
-	DbgPointer("sk_pr", key_data->sk_pr, key_data->prf_key_size);
+	//DbgPointer("sk_pr", key_data->sk_pr, key_data->prf_key_size);
 
 	return true;
 }
@@ -3431,16 +3421,14 @@ void* IKEv2GenerateSKEYSEEDInitial(IKEv2_PRF* prf, BUF *nonce_i, BUF *nonce_r, U
 	UCHAR* nonce_concat = ZeroMalloc(sizeof(UCHAR) * nonce_sum_size);
 	Copy(nonce_concat, nonce_i->Buf, nonce_i->Size);
 	Copy(nonce_concat + nonce_i->Size, nonce_r->Buf, nonce_r->Size);
-	DbgPointer("Nonce concat", nonce_concat, nonce_sum_size);
-
-	Dbg("Calc PRF");
+	
 	UCHAR* skeyseed = Ikev2CalcPRF(prf, nonce_concat, nonce_sum_size, shared_key, sizeof(UCHAR) * key_len);
 	if (skeyseed == NULL) {
 		Dbg("Error in generating SKEYSEED");
-	}
+	}/*
 	else {
 		DbgPointer("SKEYSEED", skeyseed, prf->key_size);
-	}
+	}*/
 	
 	Free(nonce_concat);
 	return skeyseed;

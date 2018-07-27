@@ -781,6 +781,7 @@ UINT ikev2_configuration_decode(BUF *b, IKEv2_CP_PAYLOAD *p) {
 		IKEv2_CP_ATTR* attr = (IKEv2_CP_ATTR*)ZeroMalloc(sizeof(IKEv2_CP_ATTR));
 
 		attr->type = ReadBufShort(b) & ((1 << 15) - 1);
+		Dbg("CP payload: got attribute of type %u", attr->type);
 		/* if (attr->type < 1 || attr->type > 15) { */
 		/* return IKEv2_INVALID_SYNTAX; */
 		/* } */
