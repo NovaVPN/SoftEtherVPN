@@ -342,6 +342,7 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 				break;
 			}
 			case IKE_UDP_TYPE_ESP: {
+				Dbg("Got esp packet");
 				ProcIPsecEspPacketRecv(ike, p); // TODO global ESP handling
 				break;
 			}
