@@ -769,14 +769,16 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			}
 			add->length = 4;
 			CEDAR* cedar = ike->ike_server->Cedar;
-			char* ipstr = ZeroMalloc(64);
-			IPToStr(ipstr, 64, serverIP);
+			
 			//char newIP[5] = { (char)130, (char)158, (char)6, (char)60, (char)0 };
 			//Dbg("IP got: %s", );
 			IP ip;
 			bool res = StrToIP(&ip, cedar->Server->DDnsClient->CurrentIPv4);
 			if (res == true) {
 				Dbg("OK");
+				char* ipstr = ZeroMalloc(64);
+				IPToStr(ipstr, 64, &ip);
+				Dbg("IP got: %s", ipstr);
 				add->value = NewBufFromMemory(ip.addr, 4);
 			}
 			//bool res = GetMyPrivateIP(&ip, false);
@@ -791,7 +793,9 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			}*/
 			break;
 		case IKEv2_INTERNAL_IP4_NETMASK:
-			//add->length = 4;
+			add->length = 4;
+			UCHAR res[4] = {(UCHAR)255, (UCHAR)255, (UCHAR)255, (UCHAR)255};
+			add->value = NewBufFromMemory(res, 4);
 			// TODO: found NETMASK
 			break;
 		case IKEv2_INTERNAL_IP4_NBNS:
