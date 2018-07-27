@@ -1184,9 +1184,11 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 				IKEv2_TS_PAYLOAD* TSr = pTSr->data;
 
 				BUF* id_data = ikev2_ID_encode(IDi);
-				Dbg("IDi: %u %s", IDi->data->Size, (UCHAR*)(IDi->data->Buf));
+				Dbg("IDi: type %u, size %u", IDi->ID_type, IDi->data->Size);
+				DbgBuf("IDi: ", IDi->data);
 				if (IDr != NULL) {
-					Dbg("IDr: %u %s", IDr->data->Size, (UCHAR*)(IDr->data->Buf));
+					Dbg("IDr: type %u, %u", IDr->ID_type, IDr->data->Size);
+					DbgBuf("IDr: ", IDr->data);
 				}
 
 				BUF* auth_i_integ = AUTHi->data;
@@ -2369,7 +2371,6 @@ bool Ikev2IsValidTransform(IKEv2_CRYPTO_ENGINE* engine, IKEv2_SA_TRANSFORM* tran
 
 	bool ok = false;
 	// check id
-	Dbg("Switching over transforms: 0x%x", transform->transform.type);
 	switch (transform->transform.type) {
 	case IKEv2_TRANSFORM_TYPE_ENCR:
 		ok = ((transform->transform.ID >= IKEv2_TRANSFORM_ID_ENCR_DES && transform->transform.ID <= IKEv2_TRANSFORM_ID_ENCR_BLOWFISH) ||
@@ -2543,13 +2544,12 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 	for (UINT i = 0; i < prop_count; ++i) {
 		IKEv2_SA_PROPOSAL* proposal = (IKEv2_SA_PROPOSAL*)LIST_DATA(sa->proposals, i);
 
-		Dbg("Check proposal with protocolID = %u", proposal->protocol_id);
 		if (proposal->protocol_id == protocol) {
 			bool ok_prop = true;
 			for (UCHAR j = 0; j < proposal->transform_number; ++j) {
 				IKEv2_SA_TRANSFORM* transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(proposal->transforms, j);
 				if (Ikev2IsValidTransformType(transform) == false) {
-					Dbg("Check failed, transform is not valid, proposal rejected");
+					Dbg("Proposal check failed, transform is not valid, proposal rejected");
 					ok_prop = false;
 					break;
 				}
@@ -2948,7 +2948,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateSK(LIST* payloads, IKEv2_CRYPTO_PARAM* cparam) 
 
 	// Is it in BIG ENDIAN or not? Maybe this is not true
 	BUF* pay_buf = Ikev2BuildPayloadList(payloads);
-	DbgBuf("Encoded payloads", pay_buf);
+	//DbgBuf("Encoded payloads", pay_buf);
 
 	UINT pay_size = pay_buf->Size + 1;
 	UINT rest_pad = pay_size % block_size;
@@ -2960,7 +2960,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateSK(LIST* payloads, IKEv2_CRYPTO_PARAM* cparam) 
 	Copy(src, pay_buf->Buf, pay_buf->Size);
 	// Make padding = 0x00000... value
 	Copy((UCHAR*)src + new_length - 1, &pad_length, 1);
-	DbgPointer("Before encrypt: ", src, new_length);
+	//DbgPointer("Before encrypt: ", src, new_length);
 	cparam->key_data->IV = IV;
 	BUF* encrypted = Ikev2Encrypt(src, new_length, cparam);
 	Free(IV);
@@ -2971,7 +2971,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateSK(LIST* payloads, IKEv2_CRYPTO_PARAM* cparam) 
 
 		return NULL;
 	}
-	DbgBuf("After encrypt:", encrypted);
+	//DbgBuf("After encrypt:", encrypted);
 
 	sk->encrypted_payloads = encrypted;
 	sk->padding = NULL;
@@ -3666,17 +3666,16 @@ void* Ikev2CalcPRF(IKEv2_PRF* prf, void* key, UINT key_size, void* text, UINT te
 	switch (prf->type){
 	case IKEv2_TRANSFORM_ID_PRF_HMAC_MD5:
         HMacMd5(ret, key, key_size, text, text_size);
-        Dbg("finished prf_key_size %u prf_type %u, text_size %u", prf->key_size, prf->type, text_size);
         break;
 	case IKEv2_TRANSFORM_ID_PRF_HMAC_SHA1:
 		HMacSha1(ret, key, key_size, text, text_size);
-        Dbg("finished prf_key_size %u prf_type %u, text_size %u", prf->key_size, prf->type, text_size);
-		break;
+        break;
 	default:
-		Debug("Unknown prf type: %d\n", prf->type);
+		Debug("Unknown prf type: u\n", prf->type);
 		Free(ret);
-		return NULL;
+		ret = NULL;
 	}
+
 	return ret;
 }
 
@@ -3690,11 +3689,8 @@ void* Ikev2CalcPRFplus(IKEv2_PRF* prf, void* key, UINT key_size, void* text, UIN
 
 	UCHAR* ret = (UCHAR*)ZeroMalloc((iteration_num * prf->key_size) * sizeof(UCHAR));
 	void* last = NULL;
-	//UINT rest = needed_size;
 	for (UCHAR i = 0; i < iteration_num; ++i) {
 		BUF* new_text = NewBuf();
-		//BUF* new_text = (i == 0) ? NewBufFromMemory(text, text_size) : NewBufFromMemory(last, prf->key_size);
-		//SeekBufToEnd(new_text);
 		if (i > 0) {
 			WriteBuf(new_text, last, prf->key_size);
 		}
@@ -3708,8 +3704,7 @@ void* Ikev2CalcPRFplus(IKEv2_PRF* prf, void* key, UINT key_size, void* text, UIN
 		}
 
 		Copy(ret + (UINT)i * (prf->key_size), prf_ret, prf->key_size * sizeof(UCHAR));
-		//rest -= prf->key_size;
-
+		
 		FreeBuf(new_text);
 		if (last != NULL) {
 			Free(last);
