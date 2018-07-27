@@ -3209,7 +3209,7 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 			Dbg("Deleting ESP CHILD_SA");
 			USHORT spi_count = del->num_spi;
 			for (USHORT j = 0; j < spi_count; ++j) {
-				UINT SPI = *(UINT*)((BUF*)LIST_DATA(del->spi_list, j))->Buf;
+				UINT SPI = ReadBufInt((BUF*)LIST_DATA(del->spi_list, j));
 				bool res = Ikev2DeleteChildSA(ike, SA, SPI);
 				if (res == true) {
 					Add(to_send, pDel);
