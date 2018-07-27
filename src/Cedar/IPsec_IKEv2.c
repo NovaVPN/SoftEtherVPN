@@ -794,8 +794,9 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			break;
 		case IKEv2_INTERNAL_IP4_NETMASK:
 			add->length = 4;
-			UCHAR res[4] = {(UCHAR)255, (UCHAR)255, (UCHAR)255, (UCHAR)255};
-			add->value = NewBufFromMemory(res, 4);
+			UCHAR* resm = Malloc(4);
+			resm[0] = resm[1] = resm[2] = resm[3] = (UCHAR)255;
+			add->value = NewBufFromMemory(resm, 4);
 			// TODO: found NETMASK
 			break;
 		case IKEv2_INTERNAL_IP4_NBNS:
