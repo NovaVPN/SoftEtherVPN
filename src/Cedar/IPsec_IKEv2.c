@@ -736,6 +736,82 @@ IKEv2_NOTIFY_PAYLOAD* Ikev2GetNotifyByType(LIST* payloads, USHORT type) {
 	return NULL;
 }
 
+IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* req) {
+	if (req == NULL) {
+		return NULL;
+	}
+
+	IKEv2_PACKET_PAYLOAD* reply = Ikev2CreatePacketPayload(IKEv2_CP_PAYLOAD_T, sizeof(IKEv2_CP_PAYLOAD));
+	if (reply == NULL) {
+		return NULL;
+	}
+
+	IKEv2_CP_PAYLOAD* ret = reply->data;
+	ret->type = IKEv2_CP_CFG_REPLY;
+	ret->attributes = NewList(NULL);
+
+	UINT attrCount = LIST_NUM(req->attributes);
+	for (UINT i = 0; i < attrCount; ++i) {
+		// For now reply only some IPv4 queries && application version
+		IKEv2_CP_ATTR* attr = ((IKEv2_CP_ATTR*)LIST_DATA(req->attributes, i));
+		
+		IKEv2_CP_ATTR* add = Malloc(sizeof(IKEv2_CP_ATTR));
+		add->type = attr->type;
+		add->length = 0;
+		add->value = NULL;
+
+		switch (attr->type) {
+		case IKEv2_INTERNAL_IP4_ADDRESS:
+			if (attr->length > 0) {
+				add->length = attr->length;
+				add->value = CloneBuf(attr->value);
+				break;
+			}
+			add->length = 4;
+			CEDAR* cedar = ike->ike_server->Cedar;
+			char* hostname = cedar->MachineName;
+			Dbg("Hostname: %s", hostname);
+			IP ip;
+			bool res = GetIP(&ip, hostname);
+			if (res == true) {
+				char* ipstr = ZeroMalloc(4);
+				IPToStr(ipstr, 4, &ip);
+				Dbg("IP got: %s", ipstr);
+				add->value = NewBufFromMemory(ip.addr, 4);
+			}
+			else {
+				Dbg("Internal IP isn't got");
+			}
+			break;
+		case IKEv2_INTERNAL_IP4_NETMASK:
+			//add->length = 4;
+			// TODO: found NETMASK
+			break;
+		case IKEv2_INTERNAL_IP4_NBNS:
+			Dbg("Asking for NetBios Name Server, skipping");
+			if (attr->length > 0) {
+				add->length = attr->length;
+				add->value = CloneBuf(attr->value);
+			}
+			break;
+		case IKEv2_APPLICATION_VERSION: {
+			char text[] = "SoftEther IKEv2";
+			add->length = strlen(text);
+			add->value = NewBufFromMemory(text, attr->length);
+		}
+		case IKEv2_INTERNAL_IP4_DNS:
+		case IKEv2_INTERNAL_IP4_DHCP:
+		default:
+			Dbg("Ask for unsupported CP attribute: %u", attr->type);
+			break;
+		}
+
+		Add(ret->attributes, add);
+	}
+	
+	return reply;
+}
+
 // IKEv2 SA_INIT
 void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET *p) {
 	if (ike == NULL || header == NULL || p == NULL) {
@@ -1240,12 +1316,18 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 										if (auth_r_calced != NULL) {
 											Dbg("Auth field calculated, size=%u", auth_r_calced->Size);
 											IKEv2_PACKET_PAYLOAD* auth_r = Ikev2CreateAuth(IKEv2_AUTH_SHARED_KEY_MESSAGE_INTEGRITY_CODE, auth_r_calced);
-											IKEv2_PACKET_PAYLOAD* cp = Ikev2CreateCP(peer_cfg->data, NULL, IKEv2_CP_CFG_REPLY);
+											IKEv2_CP_PAYLOAD* cpg = peer_cfg->data;
 
 											LIST* send_list = NewListFast(NULL);
 											Add(send_list, pIDr);
 											Add(send_list, auth_r);
-											Add(send_list, cp);
+											
+											IKEv2_PACKET_PAYLOAD* cp = (cpg->type == IKEv2_CP_CFG_REQUEST) ?
+																Ikev2CreateCPReply(ike, cpg) : NULL;
+											if (cp != NULL) {
+												Add(send_list, cp);
+											}
+
 											Add(send_list, pSAr);
 											Add(send_list, pTSi);
 											Add(send_list, pTSr);
