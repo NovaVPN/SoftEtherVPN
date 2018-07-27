@@ -776,10 +776,10 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			bool res = StrToIP(&ip, cedar->Server->DDnsClient->CurrentIPv4);
 			if (res == true) {
 				Dbg("OK");
-				char* ipstr = ZeroMalloc(64);
-				IPToStr(ipstr, 64, &ip);
+				UCHAR* ipstr = ZeroMalloc(5);
+				//IPToStr(ipstr, 64, &ip);
 				Dbg("IP got: %s", ipstr);
-				add->value = NewBufFromMemory(ip.addr, 4);
+				add->value = NewBufFromMemory(ipstr, 4);
 			}
 			//bool res = GetMyPrivateIP(&ip, false);
 			/*if (res == true) {
