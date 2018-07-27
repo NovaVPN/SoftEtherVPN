@@ -769,9 +769,13 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			}
 			add->length = 4;
 			CEDAR* cedar = ike->ike_server->Cedar;
-			IP ip;
-			bool res = GetMyPrivateIP(&ip, false);
-			if (res == true) {
+			IP* ip = &cedar->Server->ListenIP;
+			char* ipstr = ZeroMalloc(4);
+			IPToStr(ipstr, 64, &ip);
+			Dbg("IP got: %s", ipstr);
+			add->value = NewBufFromMemory(ip->addr, 4);
+			//bool res = GetMyPrivateIP(&ip, false);
+			/*if (res == true) {
 				char* ipstr = ZeroMalloc(4);
 				IPToStr(ipstr, 64, &ip);
 				Dbg("IP got: %s", ipstr);
@@ -779,7 +783,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			}
 			else {
 				Dbg("Internal IP isn't got");
-			}
+			}*/
 			break;
 		case IKEv2_INTERNAL_IP4_NETMASK:
 			//add->length = 4;
