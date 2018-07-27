@@ -769,8 +769,8 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			}
 			add->length = 4;
 			CEDAR* cedar = ike->ike_server->Cedar;
-			IP* ip = &cedar->Server->ListenIP;
-			char* ipstr = ZeroMalloc(4);
+			IP* ip = &(cedar->Server->ListenIP);
+			char* ipstr = ZeroMalloc(64);
 			IPToStr(ipstr, 64, &ip);
 			Dbg("IP got: %s", ipstr);
 			add->value = NewBufFromMemory(ip->addr, 4);
