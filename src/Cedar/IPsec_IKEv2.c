@@ -1184,9 +1184,9 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 				IKEv2_TS_PAYLOAD* TSr = pTSr->data;
 
 				BUF* id_data = ikev2_ID_encode(IDi);
-				Dbg("IDi: %s", (UCHAR*)(IDi->data->Buf));
+				Dbg("IDi: %u %s", IDi->data->Size, (UCHAR*)(IDi->data->Buf));
 				if (IDr != NULL) {
-					Dbg("IDi: %s", (UCHAR*)(IDr->data->Buf));
+					Dbg("IDr: %u %s", IDr->data->Size, (UCHAR*)(IDr->data->Buf));
 				}
 
 				BUF* auth_i_integ = AUTHi->data;
