@@ -169,7 +169,7 @@ void ProcessIKEv2PacketRecv(IKEv2_SERVER *ike, UDPPACKET *p); // global
 //void ProcessIKEv2AuthExchange(IKEv2_SERVER *ike, UDPPACKET *p);
 //void ProcessIKEv2CreateChildSAExchange(IKEv2_SERVER *ike, UDPPACKET *p);
 //void ProcessIKEv2InformatinalExchange(IKEv2_SERVER *ike, UDPPACKET *p);
-//void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p);
+void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT SPI, IKEv2_IPSECSA* sa, UCHAR* src, UINT src_size);
 
 void Ikev2FreePacket(IKEv2_PACKET *p);
 void Ikev2FreePayloadList(LIST *payloads);

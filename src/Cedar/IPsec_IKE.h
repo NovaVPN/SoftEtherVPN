@@ -476,6 +476,6 @@ void ProcIPsecEtherIPPacketRecv(IKE_SERVER *ike, IKE_CLIENT *c, UCHAR *data, UIN
 bool IsIPsecSaTunnelMode(IPSECSA *sa);
 
 IKE_SA *SearchIkeSaByCookie(IKE_SERVER *ike, UINT64 init_cookie, UINT64 resp_cookie);
-
+void ProcIPsecEspPacketRecvShort(IKE_SERVER* ike, UDPPACKET* p, UINT spi, IPSECSA* ipsec_sa, UCHAR* src, UINT srcSize);
 #endif	// IPSEC_IKE_H
 

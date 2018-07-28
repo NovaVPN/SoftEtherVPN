@@ -5987,5 +5987,282 @@ IKE_SERVER *NewIKEServer(CEDAR *cedar, IPSEC_SERVER *ipsec)
 	return ike;
 }
 
+void ProcIPsecEspPacketRecvShort(IKE_SERVER* ike, UDPPACKET* p, UINT spi, IPSECSA* ipsec_sa, UCHAR* src, UINT src_size) {
+	UINT seq;
+	IKE_CLIENT *c;
+	UINT block_size;
+	UINT hash_size;
+	bool update_status = false;
+	UCHAR *iv;
+	UCHAR *hash;
+	UCHAR *encrypted_payload_data;
+	UINT size_of_payload_data;
+	IKE_CRYPTO_PARAM cp;
+	BUF *dec;
+	UCHAR calced_hash[IKE_MAX_HASH_SIZE];
+	bool is_tunnel_mode = false;
+	
+	// Get the sequence number
+	if (src_size < (sizeof(UINT) * 2))
+	{
+		return;
+	}
+	seq = READ_UINT(src + sizeof(UINT));
 
+	// Search and retrieve the IPsec SA from SPI
+	is_tunnel_mode = IsIPsecSaTunnelMode(ipsec_sa);
 
+	c = ipsec_sa->IkeClient;
+	if (c == NULL)
+	{
+		return;
+	}
+
+	block_size = ipsec_sa->TransformSetting.Crypto->BlockSize;
+	hash_size = IKE_ESP_HASH_SIZE;
+
+	// Get the IV
+	if (src_size < (sizeof(UINT) * 2 + block_size + hash_size + block_size))
+	{
+		return;
+	}
+	iv = src + sizeof(UINT) * 2;
+
+	// Get the hash
+	hash = src + src_size - hash_size;
+
+	// Inspect the HMAC
+	IkeHMac(ipsec_sa->TransformSetting.Hash, calced_hash, ipsec_sa->HashKey,
+		ipsec_sa->TransformSetting.Hash->HashSize, src, src_size - hash_size);
+
+	if (Cmp(calced_hash, hash, hash_size) != 0)
+	{
+		//Debug("IPsec SA 0x%X: Invalid HMAC Value.\n", ipsec_sa->Spi);
+		return;
+	}
+
+	// Get the payload data
+	encrypted_payload_data = src + sizeof(UINT) * 2 + block_size;
+	size_of_payload_data = src_size - hash_size - block_size - sizeof(UINT) * 2;
+	if (size_of_payload_data == 0 || (size_of_payload_data % block_size) != 0)
+	{
+		// Payload data don't exist or is not a multiple of block size
+		return;
+	}
+
+	// Decrypt the payload data
+	cp.Key = ipsec_sa->CryptoKey;
+	Copy(&cp.Iv, iv, block_size);
+
+	dec = IkeDecrypt(encrypted_payload_data, size_of_payload_data, &cp);
+	if (dec != NULL)
+	{
+		UCHAR *dec_data = dec->Buf;
+		UINT dec_size = dec->Size;
+		UCHAR size_of_padding = dec_data[dec_size - 2];
+		UCHAR next_header = dec_data[dec_size - 1];
+		if ((dec_size - 2) >= size_of_padding)
+		{
+			UINT orig_size = dec_size - 2 - size_of_padding;
+
+			ipsec_sa->TotalSize += dec_size;
+
+			if (is_tunnel_mode)
+			{
+				// Tunnel Mode
+				if (next_header == IKE_PROTOCOL_ID_IPV4 || next_header == IKE_PROTOCOL_ID_IPV6)
+				{
+					// Check the contents by parsing the IPv4 / IPv6 header in the case of tunnel mode
+					BUF *b = NewBuf();
+					static UCHAR src_mac_dummy[6] = { 0, 0, 0, 0, 0, 0, };
+					static UCHAR dst_mac_dummy[6] = { 0, 0, 0, 0, 0, 0, };
+					USHORT tpid = Endian16(next_header == IKE_PROTOCOL_ID_IPV4 ? MAC_PROTO_IPV4 : MAC_PROTO_IPV6);
+					PKT *pkt;
+
+					WriteBuf(b, src_mac_dummy, sizeof(src_mac_dummy));
+					WriteBuf(b, dst_mac_dummy, sizeof(dst_mac_dummy));
+					WriteBuf(b, &tpid, sizeof(tpid));
+
+					WriteBuf(b, dec_data, dec_size);
+
+					// Parse
+					pkt = ParsePacket(b->Buf, b->Size);
+
+#ifdef	RAW_DEBUG
+					IPsecIkeSendUdpForDebug(IPSEC_PORT_L2TP, 1, b->Buf, b->Size);
+#endif	// RAW_DEBUG
+
+					if (pkt == NULL)
+					{
+						// Parsing failure
+						dec_data = NULL;
+						dec_size = 0;
+					}
+					else
+					{
+						// Parsing success
+						switch (pkt->TypeL3)
+						{
+						case L3_IPV4:
+							// Save the internal IP address information
+							UINTToIP(&c->TunnelModeServerIP, pkt->L3.IPv4Header->DstIP);
+							UINTToIP(&c->TunnelModeClientIP, pkt->L3.IPv4Header->SrcIP);
+
+							if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) == 0)
+							{
+								if ((IPV4_GET_FLAGS(pkt->L3.IPv4Header) & 0x01) == 0)
+								{
+									if (pkt->L3.IPv4Header->Protocol == IPSEC_IP_PROTO_ETHERIP)
+									{
+										// EtherIP
+										if (ike->IPsec->Services.EtherIP_IPsec)
+										{
+											// An EtherIP packet has been received
+											ProcIPsecEtherIPPacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize, true);
+										}
+									}
+									else if (pkt->L3.IPv4Header->Protocol == IPSEC_IP_PROTO_L2TPV3)
+									{
+										// L2TPv3
+										if (ike->IPsec->Services.EtherIP_IPsec)
+										{
+											// A L2TPv3 packet has been received
+											ProcL2TPv3PacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize, true);
+										}
+									}
+								}
+							}
+							break;
+
+						case L3_IPV6:
+							// Save the internal IP address information
+							SetIP6(&c->TunnelModeServerIP, pkt->IPv6HeaderPacketInfo.IPv6Header->DestAddress.Value);
+							SetIP6(&c->TunnelModeClientIP, pkt->IPv6HeaderPacketInfo.IPv6Header->SrcAddress.Value);
+
+							if (pkt->IPv6HeaderPacketInfo.IsFragment == false)
+							{
+								if (pkt->IPv6HeaderPacketInfo.FragmentHeader == NULL || (IPV6_GET_FLAGS(pkt->IPv6HeaderPacketInfo.FragmentHeader) & IPV6_FRAGMENT_HEADER_FLAG_MORE_FRAGMENTS) == 0)
+								{
+									if (pkt->IPv6HeaderPacketInfo.Protocol == IPSEC_IP_PROTO_ETHERIP)
+									{
+										// EtherIP
+										if (ike->IPsec->Services.EtherIP_IPsec)
+										{
+											// An EtherIP packet has been received
+											ProcIPsecEtherIPPacketRecv(ike, c, pkt->IPv6HeaderPacketInfo.Payload, pkt->IPv6HeaderPacketInfo.PayloadSize, true);
+										}
+									}
+									else if (pkt->IPv6HeaderPacketInfo.Protocol == IPSEC_IP_PROTO_L2TPV3)
+									{
+										// L2TPv3
+										if (ike->IPsec->Services.EtherIP_IPsec)
+										{
+											// A L2TPv3 packet has been received
+											ProcL2TPv3PacketRecv(ike, c, pkt->IPv6HeaderPacketInfo.Payload, pkt->IPv6HeaderPacketInfo.PayloadSize, true);
+										}
+									}
+								}
+							}
+							break;
+						}
+
+						FreePacket(pkt);
+					}
+
+					FreeBuf(b);
+				}
+			}
+			else
+			{
+				// Transport mode
+				if (next_header == IP_PROTO_UDP)
+				{
+					if (ike->IPsec->Services.L2TP_IPsec || ike->IPsec->Services.EtherIP_IPsec)
+					{
+						// An UDP packet has been received
+						ProcIPsecUdpPacketRecv(ike, c, dec_data, dec_size);
+					}
+				}
+				else if (next_header == IPSEC_IP_PROTO_ETHERIP)
+				{
+					if (ike->IPsec->Services.EtherIP_IPsec)
+					{
+						// An EtherIP packet has been received
+						ProcIPsecEtherIPPacketRecv(ike, c, dec_data, dec_size, false);
+					}
+				}
+				else if (next_header == IPSEC_IP_PROTO_L2TPV3)
+				{
+					if (ike->IPsec->Services.EtherIP_IPsec)
+					{
+						// A L2TPv3 packet has been received
+						ProcL2TPv3PacketRecv(ike, c, dec_data, dec_size, false);
+					}
+				}
+			}
+
+			update_status = true;
+		}
+
+		FreeBuf(dec);
+	}
+
+	if (update_status)
+	{
+		bool start_qm = false;
+		// Update the status of the client
+		c->CurrentIpSecSaRecv = ipsec_sa;
+		if (ipsec_sa->PairIPsecSa != NULL)
+		{
+			c->CurrentIpSecSaSend = ipsec_sa->PairIPsecSa;
+
+			if (p->DestPort == IPSEC_PORT_IPSEC_ESP_UDP)
+			{
+				IPSECSA *send_sa = c->CurrentIpSecSaSend;
+				if (send_sa->TransformSetting.CapsuleMode == IKE_P2_CAPSULE_TUNNEL)
+				{
+					send_sa->TransformSetting.CapsuleMode = IKE_P2_CAPSULE_NAT_TUNNEL_1;
+				}
+				else if (send_sa->TransformSetting.CapsuleMode == IKE_P2_CAPSULE_TRANSPORT)
+				{
+					send_sa->TransformSetting.CapsuleMode = IKE_P2_CAPSULE_NAT_TRANSPORT_1;
+				}
+			}
+		}
+		c->LastCommTick = ike->Now;
+		ipsec_sa->LastCommTick = ike->Now;
+		if (ipsec_sa->PairIPsecSa != NULL)
+		{
+			ipsec_sa->PairIPsecSa->LastCommTick = ike->Now;
+		}
+
+		SetIkeClientEndpoint(ike, c, &p->SrcIP, p->SrcPort, &p->DstIP, p->DestPort);
+
+		if (seq >= 0xf0000000)
+		{
+			// Execute a QuickMode forcibly since sequence number is going to exhaust
+			start_qm = true;
+		}
+
+		if (ipsec_sa->TransformSetting.LifeKilobytes != 0)
+		{
+			UINT64 hard_size = (UINT64)ipsec_sa->TransformSetting.LifeKilobytes * (UINT64)1000;
+			UINT64 soft_size = hard_size * (UINT64)2 / (UINT64)3;
+
+			if (ipsec_sa->TotalSize >= soft_size)
+			{
+				// Execute a QuickMode forcibly because the capacity limit is going to exceed
+				start_qm = true;
+			}
+		}
+
+		if (start_qm)
+		{
+			if (ipsec_sa->StartQM_FlagSet == false)
+			{
+				c->StartQuickModeAsSoon = true;
+				ipsec_sa->StartQM_FlagSet = true;
+			}
+		}
+	}
+}

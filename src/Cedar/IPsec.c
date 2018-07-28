@@ -296,12 +296,12 @@ void IPsecProcESPPacketToServer(IKE_SERVER* ikev1, IKEv2_SERVER* ikev2, UDPPACKE
 		}
 		else {
 			Dbg("Processing packet to IKEv2");
-			// TODO: proc to IKEv2
+			ProcessIKEv2ESP(ikev2, p, spi, childSA, src, src_size);
 		}
 	}
 	else {
 		Dbg("Processing packet to IKEv1");
-		// TODO: proc to IKEv2
+		ProcIPsecEspPacketRecvShort(ikev1, p, spi, ipsec_sa, src, src_size);
 	}
 }
 
