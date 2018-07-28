@@ -989,8 +989,8 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		Add(send_list, SAr);
 		Add(send_list, KEr);
 		Add(send_list, Nr);
-		Add(send_list, NATs);
-		Add(send_list, NATd);
+		//Add(send_list, NATs);
+		//Add(send_list, NATd);
 
 		IKEv2_PACKET_PAYLOAD* cp = (CP != NULL && CP->type == IKEv2_CP_CFG_REQUEST) ? Ikev2CreateCPReply(ike, CP) : NULL;
 		if (cp != NULL) {
