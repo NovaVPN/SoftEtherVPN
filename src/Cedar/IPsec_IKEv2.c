@@ -915,16 +915,16 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 
 	{
 		BUF* bSPI = NewBuf();
-		WriteBufInt64(bSPI, SPIi);
+		WriteBufInt64(bSPI, Endian64(SPIi));
 		WriteBufInt64(bSPI, 0);
 
 		BUF* bsr = NewBufFromMemory(bSPI->Buf, bSPI->Size);
 		WriteBuf(bsr, p->DstIP.addr, 4);
-		WriteBufInt(bsr, p->DestPort);
+		WriteBufInt(bsr, Endian32(p->DestPort));
 
 		BUF* bdr = NewBufFromMemory(bSPI->Buf, bSPI->Size);
 		WriteBuf(bdr, p->SrcIP.addr, 4);
-		WriteBufInt(bdr, p->SrcPort);
+		WriteBufInt(bdr, Endian32(p->SrcPort));
 
 		void* rbsr = Malloc(20);
 		void* rbdr = Malloc(20);
