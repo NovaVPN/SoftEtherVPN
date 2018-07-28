@@ -385,6 +385,10 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 
 	// Inspect the HMAC
 	void* calced_hash = Ikev2CalcInteg(ipsec_sa->param->setting->integ, ipsec_sa->param->key_data->sk_ai, src, src_size - hash_size);
+	DbgPointer("Calced", calced_hash, hash_size);
+	void* calced_hash2 = Ikev2CalcInteg(ipsec_sa->param->setting->integ, ipsec_sa->param->key_data->sk_ar, src, src_size - hash_size);
+	DbgPointer("Calced2", calced_hash2, hash_size);
+	DbgPointer("Got", hash, hash_size);
 
 	if (Cmp(calced_hash, hash, hash_size) != 0)
 	{
