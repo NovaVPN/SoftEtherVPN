@@ -915,7 +915,7 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 
 	{
 		BUF* bSPI = NewBuf();
-		WriteBufInt64(bSPI, Endian64(SPIi));
+		WriteBufInt64(bSPI, SPIi);
 		WriteBufInt64(bSPI, 0);
 
 		BUF* bsr = NewBufFromMemory(bSPI->Buf, bSPI->Size);
@@ -933,7 +933,7 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		WriteBufChar(bdr, (UCHAR)70);
 		WriteBufChar(bdr, (UCHAR)192);
 		WriteBufChar(bdr, (UCHAR)190);
-		WriteBufInt(bdr, Endian32(p->SrcPort));
+		WriteBufInt(bdr, p->SrcPort);
 
 		void* rbsr = Malloc(20);
 		void* rbdr = Malloc(20);
