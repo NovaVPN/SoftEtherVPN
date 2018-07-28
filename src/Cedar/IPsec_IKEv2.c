@@ -838,7 +838,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateNATNotify(UINT64 SPIi, UINT64 SPIr, IP* ip, UIN
 	WriteBufInt64(buf, SPIi);
 	WriteBufInt64(buf, SPIr);
 	WriteBuf(buf, ip->addr, 4);
-	WruteBufInt(buf, port);
+	WriteBufInt(buf, port);
 
 	void* dst = ZeroMalloc(20);
 	Sha1(dst, buf->Buf, buf->Size);
