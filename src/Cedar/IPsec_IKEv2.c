@@ -397,6 +397,8 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	// Get the payload data
 	encrypted_payload_data = src + sizeof(UINT) * 2 + block_size;
 	size_of_payload_data = src_size - hash_size - block_size - sizeof(UINT) * 2;
+	DbgPointer("Encrypted data", encrypted_payload_data, size_of_payload_data);
+
 	if (size_of_payload_data == 0 || (size_of_payload_data % block_size) != 0)
 	{
 		Dbg("Not enough payload data");
