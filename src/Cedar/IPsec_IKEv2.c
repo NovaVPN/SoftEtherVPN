@@ -793,7 +793,8 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			// FOUND CORRECT NETMASK
 			add->length = 4;
 			UCHAR* resm = Malloc(4);
-			resm[0] = resm[1] = resm[2] = resm[3] = (UCHAR)255;
+			resm[0] = (UCHAR)255;
+			resm[1] = resm[2] = resm[3] = 0;
 			add->value = NewBufFromMemory(resm, 4);
 			DbgBuf("VALUE: ", add->value);
 			break;
