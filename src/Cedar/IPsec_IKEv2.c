@@ -559,11 +559,11 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 				//		// A L2TPv3 packet has been received
 				//		ProcL2TPv3PacketRecv(ike, c, dec_data, dec_size, false);
 				//	}
-				//}
+				// }
 			}
 
 			update_status = true;
-		}
+		//}
 
 		FreeBuf(dec);
 	}
