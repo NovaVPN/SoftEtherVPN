@@ -367,7 +367,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	}
 	seq = READ_UINT(src + sizeof(UINT));
 	Dbg("Seq: %u", seq);
-	//is_tunnel_mode = IsIPsecSaTunnelMode(ipsec_sa);
+	is_tunnel_mode = IsIPsecSaTunnelMode(ipsec_sa);
 
 	//c = ipsec_sa->IkeClient;
 
@@ -385,16 +385,13 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 
 	// Inspect the HMAC
 	void* calced_hash = Ikev2CalcInteg(ipsec_sa->param->setting->integ, ipsec_sa->param->key_data->sk_ai, src, src_size - hash_size);
-	DbgPointer("Calced", calced_hash, hash_size);
-	void* calced_hash2 = Ikev2CalcInteg(ipsec_sa->param->setting->integ, ipsec_sa->param->key_data->sk_ar, src, src_size - hash_size);
-	DbgPointer("Calced2", calced_hash2, hash_size);
-	DbgPointer("Got", hash, hash_size);
-
 	if (Cmp(calced_hash, hash, hash_size) != 0)
 	{
 		Dbg("Hashes are not same");
+		Free(calced_hash);
 		return;
 	}
+	Free(calced_hash);
 
 	Dbg("OK, hashes are the same");
 	// Get the payload data
@@ -419,14 +416,16 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	if (dec != NULL)
 	{
 		Dbg("Decrypted ok");
-//		UCHAR *dec_data = dec->Buf;
-//		UINT dec_size = dec->Size;
-//		UCHAR size_of_padding = dec_data[dec_size - 2];
-//		UCHAR next_header = dec_data[dec_size - 1];
-//		if ((dec_size - 2) >= size_of_padding)
-//		{
-//			UINT orig_size = dec_size - 2 - size_of_padding;
-//
+		UCHAR *dec_data = dec->Buf;
+		UINT dec_size = dec->Size;
+		UCHAR size_of_padding = dec_data[dec_size - 2];
+		UCHAR next_header = dec_data[dec_size - 1];
+		Dbg("Next header: %u", next_header);
+		if ((dec_size - 2) >= size_of_padding)
+		{
+			Dbg("Got actual payloads");
+			UINT orig_size = dec_size - 2 - size_of_padding;
+
 //			ipsec_sa->TotalSize += dec_size;
 //
 //			if (is_tunnel_mode)
@@ -533,40 +532,40 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 //
 //					FreeBuf(b);
 //				}
-//			}
-//			else
-//			{
-//				// Transport mode
-//				if (next_header == IP_PROTO_UDP)
-//				{
-//					if (ike->IPsec->Services.L2TP_IPsec || ike->IPsec->Services.EtherIP_IPsec)
-//					{
-//						// An UDP packet has been received
-//						ProcIPsecUdpPacketRecv(ike, c, dec_data, dec_size);
-//					}
-//				}
-//				else if (next_header == IPSEC_IP_PROTO_ETHERIP)
-//				{
-//					if (ike->IPsec->Services.EtherIP_IPsec)
-//					{
-//						// An EtherIP packet has been received
-//						ProcIPsecEtherIPPacketRecv(ike, c, dec_data, dec_size, false);
-//					}
-//				}
-//				else if (next_header == IPSEC_IP_PROTO_L2TPV3)
-//				{
-//					if (ike->IPsec->Services.EtherIP_IPsec)
-//					{
-//						// A L2TPv3 packet has been received
-//						ProcL2TPv3PacketRecv(ike, c, dec_data, dec_size, false);
-//					}
-//				}
-//			}
-//
-//			update_status = true;
-//		}
-//
-//		FreeBuf(dec);
+			}
+			else
+			{
+				//// Transport mode
+				//if (next_header == IP_PROTO_UDP)
+				//{
+				//	if (ike->IPsec->Services.L2TP_IPsec || ike->IPsec->Services.EtherIP_IPsec)
+				//	{
+				//		// An UDP packet has been received
+				//		ProcIPsecUdpPacketRecv(ike, c, dec_data, dec_size);
+				//	}
+				//}
+				//else if (next_header == IPSEC_IP_PROTO_ETHERIP)
+				//{
+				//	if (ike->IPsec->Services.EtherIP_IPsec)
+				//	{
+				//		// An EtherIP packet has been received
+				//		ProcIPsecEtherIPPacketRecv(ike, c, dec_data, dec_size, false);
+				//	}
+				//}
+				//else if (next_header == IPSEC_IP_PROTO_L2TPV3)
+				//{
+				//	if (ike->IPsec->Services.EtherIP_IPsec)
+				//	{
+				//		// A L2TPv3 packet has been received
+				//		ProcL2TPv3PacketRecv(ike, c, dec_data, dec_size, false);
+				//	}
+				//}
+			}
+
+			update_status = true;
+		}
+
+		FreeBuf(dec);
 	}
 	else {
 		Dbg("Decrypting failed");
