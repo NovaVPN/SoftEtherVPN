@@ -736,7 +736,7 @@ IKEv2_NOTIFY_PAYLOAD* Ikev2GetNotifyByType(LIST* payloads, USHORT type) {
 	return NULL;
 }
 
-IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* req, IP* serverIP) {
+IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* req) {
 	if (req == NULL) {
 		return NULL;
 	}
@@ -769,9 +769,6 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			}
 			add->length = 4;
 			CEDAR* cedar = ike->ike_server->Cedar;
-			
-			//char newIP[5] = { (char)130, (char)158, (char)6, (char)60, (char)0 };
-			//Dbg("IP got: %s", );
 			IP ip;
 			bool res = StrToIP(&ip, cedar->Server->DDnsClient->CurrentIPv4);
 			if (res == true) {
@@ -793,12 +790,12 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			}*/
 			break;
 		case IKEv2_INTERNAL_IP4_NETMASK:
+			// FOUND CORRECT NETMASK
 			add->length = 4;
 			UCHAR* resm = Malloc(4);
 			resm[0] = resm[1] = resm[2] = resm[3] = (UCHAR)255;
 			add->value = NewBufFromMemory(resm, 4);
 			DbgBuf("VALUE: ", add->value);
-			// TODO: found NETMASK
 			break;
 		case IKEv2_INTERNAL_IP4_NBNS:
 			Dbg("Asking for NetBios Name Server, skipping");
@@ -822,6 +819,33 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 		Add(ret->attributes, add);
 	}
 	
+	return reply;
+}
+
+IKEv2_PACKET_PAYLOAD* Ikev2CreateNATNotify(UINT64 SPIi, UINT64 SPIr, IP* ip, UINT port, USHORT type) {
+	IKEv2_PACKET_PAYLOAD* reply = Ikev2CreatePacketPayload(IKEv2_NOTIFY_PAYLOAD_T, sizeof(IKEv2_NOTIFY_PAYLOAD));
+	if (reply == NULL) {
+		return;
+	}
+
+	IKEv2_NOTIFY_PAYLOAD* ret = reply->data;
+	ret->spi_size = 0;
+	ret->spi = NewBuf();
+	ret->protocol_id = 0;
+	ret->notification_type = type;
+	
+	BUF* buf = NewBuf();
+	WriteBufInt64(buf, SPIi);
+	WriteBufInt64(buf, SPIr);
+	WriteBuf(buf, ip->addr, 4);
+	WruteBufInt(buf, port);
+
+	void* dst = ZeroMalloc(20);
+	Sha1(dst, buf->Buf, buf->Size);
+	ret->message = NewBufFromMemory(dst, 20);
+	
+	Free(dst);
+	FreeBuf(buf);
 	return reply;
 }
 
@@ -861,6 +885,7 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 	IKEv2_SA_PAYLOAD* SA = SAi->data;
 	IKEv2_KE_PAYLOAD* KE = KEi->data;
 	IKEv2_NONCE_PAYLOAD* nonce_i = Ni->data;
+	IKEv2_CP_PAYLOAD* CP = CPi->data;
 
 	IKEv2_CRYPTO_SETTING* setting = (IKEv2_CRYPTO_SETTING*)ZeroMalloc(sizeof(IKEv2_CRYPTO_SETTING));
 	IKEv2_PACKET_PAYLOAD* SAr = Ikev2ChooseBestIKESA(ike, SA, setting, IKEv2_PROPOSAL_PROTOCOL_IKE);
@@ -913,42 +938,6 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		DbgBuf("NAT_DESTINATION_IP_I: ", bdi);
 	}
 
-	{
-		BUF* bSPI = NewBuf();
-		WriteBufInt64(bSPI, SPIi);
-		WriteBufInt64(bSPI, 0);
-
-		BUF* bsr = NewBufFromMemory(bSPI->Buf, bSPI->Size);
-		char* rip = Malloc(64);
-		char* rsp = Malloc(64);
-		IPToStr(rip, 64, &(p->SrcIP));
-		IPToStr(rsp, 64, &(p->DstIP));
-		Dbg("Packet ips: %s %s", rip, rsp);
-		//WriteBuf(bsr, p->DstIP.addr, 4);
-		WriteBufChar(bsr, (UCHAR)95);
-		WriteBufChar(bsr, (UCHAR)213);
-		WriteBufChar(bsr, (UCHAR)195);
-		WriteBufChar(bsr, (UCHAR)158);
-		WriteBufInt(bsr, p->DestPort);
-
-		BUF* bdr = NewBufFromMemory(bSPI->Buf, bSPI->Size);
-		//WriteBuf(bdr, p->SrcIP.addr, 4);
-		WriteBufChar(bdr, (UCHAR)100);
-		WriteBufChar(bdr, (UCHAR)70);
-		WriteBufChar(bdr, (UCHAR)192);
-		WriteBufChar(bdr, (UCHAR)190);
-		WriteBufInt(bdr, p->SrcPort);
-
-		void* rbsr = Malloc(20);
-		void* rbdr = Malloc(20);
-
-		Sha1(rbsr, bsr->Buf, bsr->Size);
-		Sha1(rbdr, bdr->Buf, bdr->Size);
-
-		DbgPointer("NAT_SOURCE_IP_R: ", rbsr, 20);
-		DbgPointer("NAT_DESTINATION_IP_R: ", rbdr, 20);
-	}
-
 	DH_CTX* dh = Ikev2CreateDH_CTX(setting->dh);
 	if (dh == NULL) {
 		Dbg("DH_CTX creation failure");
@@ -990,24 +979,24 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 
 		IKEv2_PACKET_PAYLOAD* KEr = Ikev2CreateKE(setting->dh->type, dh->MyPublicKey);
 		IKEv2_PACKET_PAYLOAD* Nr = Ikev2CreateNonce(nonce_r);
-		
-		IKEv2_PACKET_PAYLOAD* cp = NULL;
-		if (CPi != NULL) {
-			cp = Ikev2CreateCP(CPi->data, NULL, IKEv2_CP_CFG_REPLY);
-		}
+		IP myIP;
+		bool res = StrToIP(&myIP, ike->ike_server->Cedar->Server->DDnsClient->CurrentIPv4);
+		IKEv2_PACKET_PAYLOAD* NATs = Ikev2CreateNATNotify(SPIi, SPIr, &myIP, p->DestPort, IKEv2_NAT_DETECTION_SOURCE_IP);
+		IKEv2_PACKET_PAYLOAD* NATd = Ikev2CreateNATNotify(SPIi, SPIr, &(p->SrcIP), p->SrcPort, IKEv2_NAT_DETECTION_DESTINATION_IP);
 
 		LIST* send_list = NewListFast(NULL);
 		Add(send_list, SAr);
 		Add(send_list, KEr);
 		Add(send_list, Nr);
+		Add(send_list, NATs);
+		Add(send_list, NATd);
+
+		IKEv2_PACKET_PAYLOAD* cp = (CP != NULL && CP->type == IKEv2_CP_CFG_REQUEST) ? Ikev2CreateCPReply(ike, CP) : NULL;
 		if (cp != NULL) {
 			Add(send_list, cp);
 		}
 
 		IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_SA_INIT, true, false, false, packet->MessageId, send_list);
-		if (cp != NULL) {
-			Delete(send_list, cp);
-		}
 		Ikev2SendPacket(ike, client, to_send, NULL);
 		newSA->succ_response = CloneBuf(to_send->ByteMsg);
 
@@ -1383,7 +1372,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 											Add(send_list, auth_r);
 											
 											IKEv2_PACKET_PAYLOAD* cp = (cpg->type == IKEv2_CP_CFG_REQUEST) ?
-																Ikev2CreateCPReply(ike, cpg, &p->DstIP) : NULL;
+																Ikev2CreateCPReply(ike, cpg) : NULL;
 											if (cp != NULL) {
 												Add(send_list, cp);
 											}
