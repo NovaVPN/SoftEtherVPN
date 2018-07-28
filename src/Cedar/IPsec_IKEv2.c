@@ -421,6 +421,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 		UCHAR size_of_padding = dec_data[dec_size - 2];
 		UCHAR next_header = dec_data[dec_size - 1];
 		Dbg("Next header: %u", next_header);
+		DbgBuf("Dec", dec);
 		if ((dec_size - 2) >= size_of_padding)
 		{
 			Dbg("Got actual payloads");
