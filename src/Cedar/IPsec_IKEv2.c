@@ -1014,12 +1014,16 @@ IKEv2_CRYPTO_KEY_DATA* IKEv2CreateKeymatWithoutDHForChildSA(IKEv2_PRF* prf, void
 	IKEv2_CRYPTO_KEY_DATA* key_data = ZeroMalloc(sizeof(IKEv2_CRYPTO_KEY_DATA));
 	key_data->encr_key_size = encr_key_size;
 	key_data->integ_key_size = integ_key_size;
+	UINT offset = 0;
 	key_data->sk_ei = res;
-	key_data->sk_er = res + encr_key_size;
+	offset += encr_key_size;
 	if (integ_key_size > 0) {
-		UINT offset = encr_key_size + integ_key_size;
 		key_data->sk_ai = res + offset;
 		offset += integ_key_size;
+	}
+	key_data->sk_er = res + offset;
+	offset += encr_key_size;
+	if (integ_key_size > 0) {
 		key_data->sk_ar = res + offset;
 	}
 
