@@ -902,6 +902,40 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		goto end;
 	}
 
+	IKEv2_NOTIFY_PAYLOAD* nat_source_i = Ikev2GetNotifyByType(packet->PayloadList, IKEv2_NAT_DETECTION_SOURCE_IP);
+	IKEv2_NOTIFY_PAYLOAD* nat_dest_i = Ikev2GetNotifyByType(packet->PayloadList, IKEv2_NAT_DETECTION_DESTINATION_IP);
+
+	if (nat_source_i != NULL && nat_dest_i != NULL) {
+		BUF* bsi = nat_source_i->message;
+		BUF* bdi = nat_dest_i->message;
+
+		DbgBuf("NAT_SOURCE_IP_I: ", bsi);
+		DbgBuf("NAT_DESTINATION_IP_I: ", bdi);
+	}
+
+	{
+		BUF* bSPI = NewBuf();
+		WriteBufInt64(bSPI, SPIi);
+		WriteBufInt64(bSPI, 0);
+
+		BUF* bsr = NewBufFromMemory(bSPI->Buf, bSPI->Size);
+		WriteBuf(bsr, p->DstIP.addr, 4);
+		WriteBufInt(bsr, p->DestPort);
+
+		BUF* bdr = NewBufFromMemory(bSPI->Buf, bSPI->Size);
+		WriteBuf(bsr, p->SrcIP.addr, 4);
+		WriteBufInt(bsr, p->SrcPort);
+
+		void* rbsr = Malloc(20);
+		void* rbdr = Malloc(20);
+
+		Sha1(rbsr, bsr->Buf, bsr->Size);
+		Sha1(rbdr, bdr->Buf, bdr->Size);
+
+		DbgPointer("NAT_SOURCE_IP_R: ", rbsr, 20);
+		DbgPointer("NAT_DESTINATION_IP_R: ", rbdr, 20);
+	}
+
 	DH_CTX* dh = Ikev2CreateDH_CTX(setting->dh);
 	if (dh == NULL) {
 		Dbg("DH_CTX creation failure");
