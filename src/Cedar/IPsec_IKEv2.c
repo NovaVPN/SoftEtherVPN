@@ -885,7 +885,7 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 	IKEv2_SA_PAYLOAD* SA = SAi->data;
 	IKEv2_KE_PAYLOAD* KE = KEi->data;
 	IKEv2_NONCE_PAYLOAD* nonce_i = Ni->data;
-	IKEv2_CP_PAYLOAD* CP = CPi->data;
+	IKEv2_CP_PAYLOAD* CP = (CPi == NULL) ? NULL : CPi->data;
 
 	IKEv2_CRYPTO_SETTING* setting = (IKEv2_CRYPTO_SETTING*)ZeroMalloc(sizeof(IKEv2_CRYPTO_SETTING));
 	IKEv2_PACKET_PAYLOAD* SAr = Ikev2ChooseBestIKESA(ike, SA, setting, IKEv2_PROPOSAL_PROTOCOL_IKE);
