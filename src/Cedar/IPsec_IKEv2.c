@@ -928,8 +928,12 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		WriteBufInt(bsr, Endian32(p->DestPort));
 
 		BUF* bdr = NewBufFromMemory(bSPI->Buf, bSPI->Size);
-		WriteBuf(bdr, p->SrcIP.addr, 4);
-		WriteBufInt(bdr, p->SrcPort);
+		//WriteBuf(bdr, p->SrcIP.addr, 4);
+		WriteBufChar(bdr, (UCHAR)100);
+		WriteBufChar(bdr, (UCHAR)70);
+		WriteBufChar(bdr, (UCHAR)192);
+		WriteBufChar(bdr, (UCHAR)190);
+		WriteBufInt(bdr, Endian32(p->SrcPort));
 
 		void* rbsr = Malloc(20);
 		void* rbdr = Malloc(20);
