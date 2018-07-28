@@ -924,8 +924,12 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		IPToStr(rip, 64, &(p->SrcIP));
 		IPToStr(rsp, 64, &(p->DstIP));
 		Dbg("Packet ips: %s %s", rip, rsp);
-		WriteBuf(bsr, p->DstIP.addr, 4);
-		WriteBufInt(bsr, Endian32(p->DestPort));
+		//WriteBuf(bsr, p->DstIP.addr, 4);
+		WriteBufChar(bsr, (UCHAR)95);
+		WriteBufChar(bsr, (UCHAR)213);
+		WriteBufChar(bsr, (UCHAR)195);
+		WriteBufChar(bsr, (UCHAR)158);
+		WriteBufInt(bsr, p->DestPort);
 
 		BUF* bdr = NewBufFromMemory(bSPI->Buf, bSPI->Size);
 		//WriteBuf(bdr, p->SrcIP.addr, 4);
