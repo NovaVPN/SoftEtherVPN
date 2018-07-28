@@ -247,6 +247,64 @@ UINT GetIKEVersion(UDPPACKET *p)
 	return header->Version >> 4;
 }
 
+void IPsecProcESPPacketToServer(IKE_SERVER* ikev1, IKEv2_SERVER* ikev2, UDPPACKET* p) {
+	if (p == NULL || (ikev1 == NULL && ikev2 == NULL)) {
+		return;
+	}
+
+	UCHAR* src = (UCHAR *)p->Data;
+	UINT src_size = p->Size;
+
+	if (src_size == 1) {
+		// Keep alive packet
+		return;
+	}
+
+	if (p->DestPort == IPSEC_PORT_IPSEC_ESP_RAW)
+	{
+		if (IsIP4(&p->DstIP))
+		{
+			// Skip the IP header when received in Raw mode (only in the case of IPv4)
+			UINT ip_header_size = GetIpHeaderSize(src, src_size);
+
+			src += ip_header_size;
+			src_size -= ip_header_size;
+		}
+	}
+
+	// Get the SPI
+	if (src_size < sizeof(UINT))
+	{
+		return;
+	}
+
+	UINT spi = READ_UINT(src);
+	if (spi == 0)
+	{
+		Dbg("SPI is 0");
+		return;
+	}
+
+	Dbg("SPI = %u", spi);
+	// Search and retrieve the IPsec SA from SPI
+	IPSECSA* ipsec_sa = SearchClientToServerIPsecSaBySpi(ikev1, spi);
+	if (ipsec_sa == NULL) {
+		Dbg("IKEv1 didn't found IPSECSA");
+		IKEv2_IPSECSA* childSA = Ikev2FindIPSECSA(ikev2, spi);
+		if (childSA == NULL) {
+			Dbg("ESP packet: not found any IPSECSA to which it was sent");
+		}
+		else {
+			Dbg("Processing packet to IKEv2");
+			// TODO: proc to IKEv2
+		}
+	}
+	else {
+		Dbg("Processing packet to IKEv1");
+		// TODO: proc to IKEv2
+	}
+}
+
 // Processing of UDP packets (one by one)
 void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 {
@@ -343,7 +401,8 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 			}
 			case IKE_UDP_TYPE_ESP: {
 				Dbg("Got esp packet");
-				ProcIPsecEspPacketRecv(ike, p); // TODO global ESP handling
+				IPsecProcESPPacketToServer(ike, ikev2, p);
+				//ProcIPsecEspPacketRecv(ike, p); // TODO global ESP handling
 				break;
 			}
 			default: {

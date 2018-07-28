@@ -3938,3 +3938,19 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateEAP(UCHAR code, UCHAR id, UCHAR type, BUF* type
 	
 	return payload;
 }
+
+IKEv2_IPSECSA* Ikev2FindIPSECSA(IKEv2_SERVER* ike, UINT SPI) {
+	if (ike == NULL) {
+		return NULL;
+	}
+
+	UINT childSACount = LIST_NUM(ike->ipsec_SAs);
+	for (UINT i = 0; i < childSACount; ++i) {
+		IKEv2_IPSECSA* child = (IKEv2_IPSECSA*)LIST_DATA(ike->ipsec_SAs, i);
+		if (child->isClosed == false && child->SPI == SPI) {
+			return child;
+		}
+	}
+
+	return NULL;
+}
