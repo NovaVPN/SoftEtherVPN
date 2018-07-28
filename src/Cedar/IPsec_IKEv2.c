@@ -919,12 +919,17 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		WriteBufInt64(bSPI, 0);
 
 		BUF* bsr = NewBufFromMemory(bSPI->Buf, bSPI->Size);
+		char* rip = Malloc(64);
+		char* rsp = Malloc(64);
+		IPToStr(rip, 64, &(p->SrcIP));
+		IPToStr(rsp, 64, &(p->DstIP));
+		Dbg("Packet ips: %s %s", rip, rsp);
 		WriteBuf(bsr, p->DstIP.addr, 4);
 		WriteBufInt(bsr, Endian32(p->DestPort));
 
 		BUF* bdr = NewBufFromMemory(bSPI->Buf, bSPI->Size);
 		WriteBuf(bdr, p->SrcIP.addr, 4);
-		WriteBufInt(bdr, Endian32(p->SrcPort));
+		WriteBufInt(bdr, p->SrcPort);
 
 		void* rbsr = Malloc(20);
 		void* rbdr = Malloc(20);
