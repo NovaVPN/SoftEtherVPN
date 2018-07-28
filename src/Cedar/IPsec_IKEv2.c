@@ -923,8 +923,8 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		WriteBufInt(bsr, p->DestPort);
 
 		BUF* bdr = NewBufFromMemory(bSPI->Buf, bSPI->Size);
-		WriteBuf(bsr, p->SrcIP.addr, 4);
-		WriteBufInt(bsr, p->SrcPort);
+		WriteBuf(bdr, p->SrcIP.addr, 4);
+		WriteBufInt(bdr, p->SrcPort);
 
 		void* rbsr = Malloc(20);
 		void* rbdr = Malloc(20);
