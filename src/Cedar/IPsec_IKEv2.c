@@ -1315,6 +1315,11 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 												Add(send_list, cp);
 											}
 
+											TSi->TS_count = 1;
+											Delete(TSi->selectors, LIST_DATA(TSi->selectors, 1));
+											TSr->TS_count = 1;
+											Delete(TSr->selectors, LIST_DATA(TSr->selectors, 1));
+
 											Add(send_list, pSAr);
 											Add(send_list, pTSi);
 											Add(send_list, pTSr);
