@@ -1356,6 +1356,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 											Add(send_list, pSAr);
 											//Add(send_list, pTSi);
 											IKEv2_PACKET_PAYLOAD* newTSi = Ikev2CreateTSr(ike, TSr);
+											newTSi->PayloadType = IKEv2_TSi_PAYLOAD_T;
 											Add(send_list, newTSi);
 											IKEv2_PACKET_PAYLOAD* newTSr = Ikev2CreateTSr(ike, TSr);
 											Add(send_list, newTSr);
