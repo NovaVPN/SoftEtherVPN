@@ -1070,6 +1070,39 @@ IKEv2_CRYPTO_KEY_DATA* IKEv2CreateKeymatWithDHForChildSA(IKEv2_PRF* prf, void* s
 	return key_data;
 }
 
+IKEv2_PACKET_PAYLOAD* Ikev2CreateTSr(IKEv2_SERVER* ike, IKEv2_TS_PAYLOAD* ask) {
+	if (ike == NULL || ask == NULL) {
+		return;
+	}
+
+	IKEv2_PACKET_PAYLOAD* ret = Ikev2CreatePacketPayload(IKEv2_TSr_PAYLOAD_T, sizeof(IKEv2_TS_PAYLOAD));
+	if (ret == NULL) {
+		return;
+	}
+
+	IKEv2_TS_PAYLOAD* ts = ret->data;
+	ts->TS_count = 1;
+	ts->selectors = NewList(NULL);
+	IKEv2_TRAFFIC_SELECTOR* sel = ZeroMalloc(sizeof(IKEv2_TRAFFIC_SELECTOR));
+	sel->IP_protocol_ID = 0;
+	sel->type = IKEv2_TS_IPV4_ADDR_RANGE;
+	sel->start_port = 0;
+	sel->end_port = 65535;
+	
+	BUF* ip = NewBuf();
+	IP myIP;
+	StrToIP(&myIP, ike->ike_server->Cedar->Server->DDnsClient->CurrentIPv4);
+	WriteBuf(ip, myIP.addr, 4);
+	sel->start_address = ip;
+	sel->end_address = CloneBuf(ip);
+
+	sel->selector_length = 2 * ip->Size + 8;
+
+	Add(ts->selectors, sel);
+
+	return ret;
+}
+
 //SK{IDi, AUTH, SAi2, TSi, TSr}
 void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET *p) {
 	if (ike == NULL || p == NULL) {
@@ -1317,12 +1350,14 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 
 											TSi->TS_count = 1;
 											Delete(TSi->selectors, LIST_DATA(TSi->selectors, 1));
-											TSr->TS_count = 1;
-											Delete(TSr->selectors, LIST_DATA(TSr->selectors, 1));
+											//TSr->TS_count = 1;
+											//Delete(TSr->selectors, LIST_DATA(TSr->selectors, 1));
 
 											Add(send_list, pSAr);
 											Add(send_list, pTSi);
-											Add(send_list, pTSr);
+											IKEv2_PACKET_PAYLOAD* newTSr = Ikev2CreateTSr(ike, TSr);
+											Add(send_list, newTSr);
+											//Add(send_list, pTSr);
 											if (is_initial_contact == true) {
 												IKEv2_PACKET_PAYLOAD* init_contact = Ikev2CreateNotify(IKEv2_INITIAL_CONTACT, NULL, NewBuf(), false);
 												Add(send_list, init_contact);
