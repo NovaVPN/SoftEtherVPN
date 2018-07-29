@@ -630,9 +630,10 @@ UINT ikev2_TS_decode(BUF *b, IKEv2_TS_PAYLOAD *p) {
 	ReadBufShort(b);
 	ReadBufChar(b);
 
+	Dbg("TS count: %u", p->TS_count);
 	p->selectors = NewList(NULL);
 	for (UINT i = 0; i < p->TS_count; ++i) {
-		IKEv2_TRAFFIC_SELECTOR* selector = (IKEv2_TRAFFIC_SELECTOR*)Malloc(sizeof(IKEv2_TRAFFIC_SELECTOR));
+		IKEv2_TRAFFIC_SELECTOR* selector = (IKEv2_TRAFFIC_SELECTOR*)ZeroMalloc(sizeof(IKEv2_TRAFFIC_SELECTOR));
 		if (selector == NULL) {
 			ikev2_free_TS_payload(p);
 			Debug("error %d while allocating memory for TRAFFIC_SELECTOR", IKEv2_OUT_OF_MEMORY);
@@ -645,6 +646,8 @@ UINT ikev2_TS_decode(BUF *b, IKEv2_TS_PAYLOAD *p) {
 		selector->start_port = ReadBufShort(b);
 		selector->end_port = ReadBufShort(b);
 
+		Dbg("TS selector: type %u, IP proto %u, sel_length %u", selector->type, selector->IP_protocol_ID, selector->selector_length);
+
 		UINT addr_size = 0;
 		switch (selector->type)
 		{
@@ -655,7 +658,7 @@ UINT ikev2_TS_decode(BUF *b, IKEv2_TS_PAYLOAD *p) {
 			addr_size = 16;
 			break;
 		default:
-			Dbg("Unknown type in Traffic Selector: %d, skipping\n", selector->type);
+			Dbg("Unknown type in Traffic Selector: %u, skipping\n", selector->type);
 			break;
 		}
 
@@ -666,7 +669,12 @@ UINT ikev2_TS_decode(BUF *b, IKEv2_TS_PAYLOAD *p) {
 			selector->start_address = ReadBufFromBuf(b, addr_size);
 			selector->end_address = ReadBufFromBuf(b, addr_size);
 
-			Add(p->selectors, (void*)selector);
+			Dbg("TS selector: %u.%u.%u.%u:%u -> %u.%u.%u.%u:%u", 
+				((UCHAR*)(selector->start_address->Buf))[0], ((UCHAR*)(selector->start_address->Buf))[1],
+				((UCHAR*)(selector->start_address->Buf))[2], ((UCHAR*)(selector->start_address->Buf))[3], selector->start_port,
+				((UCHAR*)(selector->end_address->Buf))[0], ((UCHAR*)(selector->end_address->Buf))[1],
+				((UCHAR*)(selector->end_address->Buf))[2], ((UCHAR*)(selector->end_address->Buf))[3], selector->end_port);
+			Add(p->selectors, selector);
 		}
 	}
 

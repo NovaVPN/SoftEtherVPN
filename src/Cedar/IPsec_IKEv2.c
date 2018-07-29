@@ -1231,7 +1231,6 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 				}
 			}
 			else {
-				Dbg("Got needed payloads, OK");
 				IKEv2_ID_PAYLOAD* IDi = pIDi->data;
 				IKEv2_ID_PAYLOAD* IDr = (pIDr == NULL) ? NULL : pIDr->data;
 				IKEv2_AUTH_PAYLOAD* AUTHi = pAUTHi->data;
