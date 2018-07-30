@@ -712,16 +712,6 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 				Dbg("IP got: %s", ipstr);
 				add->value = NewBufFromMemory(ip.addr, 4);
 			}
-			//bool res = GetMyPrivateIP(&ip, false);
-			/*if (res == true) {
-				char* ipstr = ZeroMalloc(4);
-				IPToStr(ipstr, 64, &ip);
-				Dbg("IP got: %s", ipstr);
-				add->value = NewBufFromMemory(ip.addr, 4);
-			}
-			else {
-				Dbg("Internal IP isn't got");
-			}*/
 			break;
 		case IKEv2_INTERNAL_IP4_NETMASK:
 			// FOUND CORRECT NETMASK
@@ -747,6 +737,10 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 		case IKEv2_INTERNAL_IP4_DNS:
 		case IKEv2_INTERNAL_IP4_DHCP:
 		default:
+			add->length = attr->length;
+			if (attr->value != NULL) {
+				add->value = CloneBuf(attr->value);
+			}
 			Dbg("Ask for unsupported CP attribute: %u", attr->type);
 			break;
 		}
@@ -1358,7 +1352,23 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 											IKEv2_PACKET_PAYLOAD* newTSi = Ikev2CreateTSr(ike, TSr);
 											newTSi->PayloadType = IKEv2_TSi_PAYLOAD_T;
 											Add(send_list, newTSi);
+
 											IKEv2_PACKET_PAYLOAD* newTSr = Ikev2CreateTSr(ike, TSr);
+											IKEv2_TRAFFIC_SELECTOR* sel = LIST_DATA(((IKEv2_TS_PAYLOAD*)(newTSr->data))->selectors, 0);
+											BUF* start = NewBuf();
+											WriteBufChar(start, (UCHAR)95);
+											WriteBufChar(start, (UCHAR)0);
+											WriteBufChar(start, (UCHAR)0);
+											WriteBufChar(start, (UCHAR)0);
+											sel->start_address = start;
+											
+											BUF* end = NewBuf();
+											WriteBufChar(end, (UCHAR)95);
+											WriteBufChar(end, (UCHAR)255);
+											WriteBufChar(end, (UCHAR)255);
+											WriteBufChar(end, (UCHAR)255);
+											sel->end_address = end;
+
 											Add(send_list, newTSr);
 											//Add(send_list, pTSr);
 											if (is_initial_contact == true) {
