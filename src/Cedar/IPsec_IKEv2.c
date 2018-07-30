@@ -865,6 +865,16 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 
 		DbgBuf("NAT_SOURCE_IP_I: ", bsi);
 		DbgBuf("NAT_DESTINATION_IP_I: ", bdi);
+
+		BUF* bSrc = NewBuf();
+		WriteBufInt64(bSrc, SPIi);
+		WriteBufInt64(bSrc, (UINT64)0);
+		WriteBuf(bSrc, p->SrcIP.addr, 4);
+		WriteBufInt(bSrc, p->SrcPort);
+
+		void* dest = ZeroMalloc(20);
+		Sha1(dest, bSrc->Buf, bSrc->Size);
+		DbgPointer("CALCED_NAT_SOURCE_IP", dest, 20);
 	}
 
 	DH_CTX* dh = Ikev2CreateDH_CTX(setting->dh);
