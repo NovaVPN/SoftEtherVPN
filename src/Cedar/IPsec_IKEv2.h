@@ -138,8 +138,21 @@ typedef struct IKEv2_SERVER {
 	LIST* SendPacketList; // LIST of UDPPACKET
 	IKEv2_CRYPTO_ENGINE* engine; // Cryptography pre-generated engine
 
-	IKE_SERVER* ike_server; // KOSTIL. BEZ NEGO TOCHNO PIZDA. Need to handle: ALL clents, SockEvent, Interrupts.
+	IKE_SERVER* ike_server; // Need to handle: ALL clents, SockEvent, Interrupts.
 } IKEv2_SERVER;
+
+typedef struct IKEv2_NOTIFY_CONTAINER {
+	void* initialContact;
+	void* additionalTSPossible;
+	void* IPCOMPSupported;
+	void* NATSourceIP;
+	void* NATDestIP;
+	void* cookie;
+	void* useTransportMode;
+	void* rekeySA;
+	void* EFCPaddingNotSupported;
+	void* nonFirstFragments;
+} IKEv2_NOTIFY_CONTAINER;
 
 /* SK_d - used for deriving new keys for the Child SAs.
 * SK_ai, SK_ar - key to the integrity protection algorithm for auth the component messages of subsequent exchanges.
@@ -153,6 +166,7 @@ typedef struct IKEv2_SERVER {
 * Lengths of _d, _pi, _pr MUST be the preferred key length of PRF
 * PRF = Pseudo Random Function.*/
 
+void Ikev2GetNotifications(IKEv2_NOTIFY_CONTAINER* c, LIST* payloads);
 IKEv2_SERVER* NewIkev2Server(CEDAR* cedar, IPSEC_SERVER *ipsec); // global
 IKEv2_CRYPTO_ENGINE* CreateIkev2CryptoEngine();
 IKEv2_CLIENT* NewIkev2Client(IP* clientIP, UINT clientPort, IP* serverIP, UINT serverPort);

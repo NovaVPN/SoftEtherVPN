@@ -4,6 +4,61 @@
 #include "IPsec_IKEv2.h"
 #include "IPsec_Ikev2Packet.h"
 
+void Ikev2GetNotifications(IKEv2_NOTIFY_CONTAINER* c, LIST* payloads) {
+	if (c == NULL || payloads == NULL) {
+		return;
+	}
+
+	Zero(c, sizeof(IKEv2_NOTIFY_CONTAINER));
+
+	LIST* allNtf = Ikev2GetAllPayloadsByType(payloads, IKEv2_NOTIFY_PAYLOAD_T);
+	if (allNtf == NULL) {
+		return;
+	}
+
+	UINT ntfCount = LIST_COUNT(allNtf);
+	for (UINT i = 0; i < ntfCount; ++i) {
+		IKEv2_NOTIFY_PAYLOAD* ntf = ((IKEv2_PACKET_PAYLOAD*)LIST_DATA(allNtf, i))->data;
+
+		switch (ntf->notification_type) {
+		case IKEv2_INITIAL_CONTACT:
+			c->initialContact = ntf;
+			break;
+		case IKEv2_ADDITIONAL_TS_POSSIBLE:
+			c->additionalTSPossible = ntf;
+			break;
+		case IKEv2_IPCOMP_SUPPORTED:
+			c->IPCOMPSupported = ntf;
+			break;
+		case IKEv2_NAT_DETECTION_SOURCE_IP:
+			c->NATSourceIP = ntf;
+			break;
+		case IKEv2_NAT_DETECTION_DESTINATION_IP:
+			c->NATDestIP = ntf;
+			break;
+		case IKEv2_COOKIE:
+			c->cookie = ntf;
+			break;
+		case IKEv2_USE_TRANSPORT_MODE:
+			c->useTransportMode = ntf;
+			break;
+		case IKEv2_REKEY_SA:
+			c->rekeySA = ntf;
+			break;
+		case IKEv2_ESP_TFC_PADDING_NOT_SUPPORTED:
+			c->EFCPaddingNotSupported = ntf;
+			break;
+		case IKEv2_NON_FIRST_FRAGMENTS_ALSO:
+			c->nonFirstFragments = ntf;
+			break;
+		default:
+			break;
+		}
+	}
+
+	ReleaseList(allNtf);
+}
+
 /* IKEv2 SERVER INITIALIZATION STRUCTURES */
 
 IKEv2_SERVER* NewIkev2Server(CEDAR* cedar, IPSEC_SERVER *ipsec) {
@@ -193,9 +248,7 @@ void Ikev2FreeServer(IKEv2_SERVER* server) {
 	Free(server);
 }
 
-void Ikev2FreeCryptoParam(IKEv2_CRYPTO_PARAM* param) {
-	IKEv2_CRYPTO_KEY_DATA* key_data = param->key_data;
-
+void Ikev2FreeCryptoKeyData(IKEv2_CRYPTO_KEY_DATA* key_data) {
 	Free(key_data->sk_d);
 	Free(key_data->shared_key);
 	key_data->shared_key = NULL;
@@ -222,6 +275,10 @@ void Ikev2FreeCryptoParam(IKEv2_CRYPTO_PARAM* param) {
 	}
 
 	Free(key_data);
+}
+
+void Ikev2FreeCryptoParam(IKEv2_CRYPTO_PARAM* param) {
+	Ikev2FreeCryptoKeyData(param->key_data);	
 	Free(param->setting);
 	Free(param);
 }
@@ -856,8 +913,23 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		goto end;
 	}
 
-	IKEv2_NOTIFY_PAYLOAD* nat_source_i = Ikev2GetNotifyByType(packet->PayloadList, IKEv2_NAT_DETECTION_SOURCE_IP);
-	IKEv2_NOTIFY_PAYLOAD* nat_dest_i = Ikev2GetNotifyByType(packet->PayloadList, IKEv2_NAT_DETECTION_DESTINATION_IP);
+	DH_CTX* dh = Ikev2CreateDH_CTX(setting->dh);
+	if (dh == NULL) {
+		Dbg("DH_CTX creation failure");
+		Free(setting);
+		Ikev2FreePayload(SAr);
+
+		goto end;
+	}
+
+	IP myIP;
+	StrToIP(&myIP, ike->ike_server->Cedar->Server->DDnsClient->CurrentIPv4);
+
+	IKEv2_NOTIFY_CONTAINER allNtfs;
+	Ikev2GetNotifications(&allNtfs, packet->PayloadList);
+
+	IKEv2_NOTIFY_PAYLOAD* nat_source_i = allNtfs.NATSourceIP;
+	IKEv2_NOTIFY_PAYLOAD* nat_dest_i = allNtfs.NATDestIP;
 
 	if (nat_source_i != NULL && nat_dest_i != NULL) {
 		BUF* bsi = nat_source_i->message;
@@ -875,15 +947,15 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		void* dest = ZeroMalloc(20);
 		Sha1(dest, bSrc->Buf, bSrc->Size);
 		DbgPointer("CALCED_NAT_SOURCE_IP", dest, 20);
-	}
 
-	DH_CTX* dh = Ikev2CreateDH_CTX(setting->dh);
-	if (dh == NULL) {
-		Dbg("DH_CTX creation failure");
-		Free(setting);
-		Ikev2FreePayload(SAr);
+		BUF* bDest = NewBuf();
+		WriteBufInt64(bDest, SPIi);
+		WriteBufInt64(bDest, (UINT64)0);
+		WriteBuf(bDest, myIP.addr, 4);
+		WriteBufInt(bDest, p->DestPort);
 
-		goto end;
+		Sha1(dest, bDest->Buf, bDest->Size);
+		DbgPointer("CALCED_NAT_DESTINATION_IP", dest, 20);
 	}
 
 	UCHAR* shared_key = ZeroMalloc(sizeof(UCHAR) * setting->dh->size); // g ^ ir
@@ -918,8 +990,6 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 
 		IKEv2_PACKET_PAYLOAD* KEr = Ikev2CreateKE(setting->dh->type, dh->MyPublicKey);
 		IKEv2_PACKET_PAYLOAD* Nr = Ikev2CreateNonce(nonce_r);
-		IP myIP;
-		bool res = StrToIP(&myIP, ike->ike_server->Cedar->Server->DDnsClient->CurrentIPv4);
 		IKEv2_PACKET_PAYLOAD* NATs = Ikev2CreateNATNotify(SPIi, SPIr, &myIP, p->DestPort, IKEv2_NAT_DETECTION_SOURCE_IP);
 		IKEv2_PACKET_PAYLOAD* NATd = Ikev2CreateNATNotify(SPIi, SPIr, &(p->SrcIP), p->SrcPort, IKEv2_NAT_DETECTION_DESTINATION_IP);
 
@@ -1129,13 +1199,11 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 	}
 
 	if (SA->isClosed == true) {
-		Dbg("Using closed IKE_SA, don't respond to it");
+		Dbg("Using closed IKE_SA, don't know what to do with it");
 		return;
 	}
 
 	IKEv2_CRYPTO_PARAM* param = SA->param;
-
-	Dbg("Auth: Parsing full packet");
 	IKEv2_PACKET* packet = Ikev2ParsePacket(header, p->Data, p->Size, param);
 	if (packet == NULL) {
 		Dbg("Corrupted packet, exiting SA_AUTH");
@@ -1143,312 +1211,324 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 	}
 
 	IKEv2_PACKET_PAYLOAD* pSKi = Ikev2GetPayloadByType(packet->PayloadList, IKEv2_SK_PAYLOAD_T, 0);
-	if (pSKi != NULL) {
-		Dbg("Found SK payload, OK");
-		IKEv2_SK_PAYLOAD* SKi = pSKi->data;
-		LIST* payloads = SKi->decrypted_payloads;
+	if (pSKi == NULL) {
+		Dbg("SK payload is not found");
+		goto end;
+	}
 
-		bool is_initial_contact = Ikev2GetNotifyByType(payloads, IKEv2_INITIAL_CONTACT) != NULL;
-		bool is_tfc_padding = Ikev2GetNotifyByType(payloads, IKEv2_ESP_TFC_PADDING_NOT_SUPPORTED) != NULL;
-		bool is_non_first_fragments = Ikev2GetNotifyByType(payloads, IKEv2_NON_FIRST_FRAGMENTS_ALSO) != NULL; // not supported
+	IKEv2_SK_PAYLOAD* SKi = pSKi->data;
+	LIST* payloads = SKi->decrypted_payloads;
 
-		//Dbg("Got decrypted payloads:");
-		//UINT cn = LIST_NUM(payloads);
-		//for (UINT i = 0; i < cn; ++i) {
-		//	Debug("%u ", ((IKEv2_PACKET_PAYLOAD*)LIST_DATA(payloads, i))->PayloadType);
-		//}
-		//Debug("%\n");
+	IKEv2_PACKET_PAYLOAD* pIDi = Ikev2GetPayloadByType(payloads, IKEv2_IDi_PAYLOAD_T, 0);
+	IKEv2_PACKET_PAYLOAD* pIDr = Ikev2GetPayloadByType(payloads, IKEv2_IDr_PAYLOAD_T, 0);
+	IKEv2_PACKET_PAYLOAD* pAUTHi = Ikev2GetPayloadByType(payloads, IKEv2_AUTH_PAYLOAD_T, 0);
+	IKEv2_PACKET_PAYLOAD* pCPi = Ikev2GetPayloadByType(payloads, IKEv2_CP_PAYLOAD_T, 0);
+	IKEv2_PACKET_PAYLOAD* pSAi = Ikev2GetPayloadByType(payloads, IKEv2_SA_PAYLOAD_T, 0);
+	IKEv2_PACKET_PAYLOAD* pTSi = Ikev2GetPayloadByType(payloads, IKEv2_TSi_PAYLOAD_T, 0);
+	IKEv2_PACKET_PAYLOAD* pTSr = Ikev2GetPayloadByType(payloads, IKEv2_TSr_PAYLOAD_T, 0);
+	IKEv2_PACKET_PAYLOAD* pEAP = Ikev2GetPayloadByType(payloads, IKEv2_EAP_PAYLOAD_T, 0);
 
-		IKEv2_PACKET_PAYLOAD* pIDi = Ikev2GetPayloadByType(payloads, IKEv2_IDi_PAYLOAD_T, 0);
-		IKEv2_PACKET_PAYLOAD* pIDr = Ikev2GetPayloadByType(payloads, IKEv2_IDr_PAYLOAD_T, 0);
-		IKEv2_PACKET_PAYLOAD* pAUTHi = Ikev2GetPayloadByType(payloads, IKEv2_AUTH_PAYLOAD_T, 0);
-		IKEv2_PACKET_PAYLOAD* peer_cfg = Ikev2GetPayloadByType(payloads, IKEv2_CP_PAYLOAD_T, 0);
-		IKEv2_PACKET_PAYLOAD* pSAi = Ikev2GetPayloadByType(payloads, IKEv2_SA_PAYLOAD_T, 0);
-		IKEv2_PACKET_PAYLOAD* pTSi = Ikev2GetPayloadByType(payloads, IKEv2_TSi_PAYLOAD_T, 0);
-		IKEv2_PACKET_PAYLOAD* pTSr = Ikev2GetPayloadByType(payloads, IKEv2_TSr_PAYLOAD_T, 0);
-		Dbg("PSK = %s", ike->ike_server->Secret);
-		if (!(pIDi == NULL || pSAi == NULL || pTSi == NULL || pTSr == NULL)) {
-			//EAP found
-			if (pAUTHi == NULL) {
-				// EAP is temporally disabled with mock
-				Dbg("EAP: disabled");
-				/* LIST* send_list = NewList(NULL); */
-				IKEv2_PACKET_PAYLOAD* mock = Ikev2CreateNotify(IKEv2_AUTHENTICATION_FAILED, NULL, NewBuf(), false);
-				LIST* to_send = NewListSingle(mock);
-				IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, SPIr, IKEv2_AUTH, true, false, false, packet->MessageId, to_send);
-				Dbg("EAP: Sending packet...");
-				Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, param);
-				return;
-				// EAP mock end
+	IKEv2_NOTIFY_CONTAINER allNtfs;
+	Ikev2GetNotifications(&allNtfs, payloads);
 
-				Dbg("EAP found, let's fuck");
+	IP myIP;
+	StrToIP(&myIP, ike->ike_server->Cedar->Server->DDnsClient->CurrentIPv4);
 
-				IKEv2_ID_PAYLOAD* IDi = pIDi->data;
-				Dbg("EAP: IDi type: %u", IDi->ID_type);
-				DbgBuf("EAP: IDi", IDi->data);
-				IKEv2_ID_PAYLOAD* IDr = (pIDr == NULL) ? NULL : pIDr->data;
-				IKEv2_SA_PAYLOAD* SAi = pSAi->data;
-				// Skip this for now
-				IKEv2_TS_PAYLOAD* TSi = pTSi->data;
-				IKEv2_TS_PAYLOAD* TSr = pTSr->data;
+	if (LIST_NUM(payloads) == 1) {
+		if (pEAP != NULL) {
+			Dbg("Got EAP message");
+			goto end;
+		}
 
-				// Comment this for now
-				//SA->eap_sa = SAi; 
-				SA->TSi = TSi;
-				SA->TSr = TSr;
+		if (pAUTHi != NULL) {
+			Dbg("Got final AUTH request");
+			goto end;
+		}
 
-				BUF* ip_data = NULL;
-				if (IDr == NULL) {
-					Dbg("EAP: Creating new IDr");
-					IP* myIP = &(SA->client->server_ip);
-					ip_data = NewBufFromMemory(myIP->addr, 4);
-					DbgBuf("EAP: ip_data", ip_data);
-					pIDr = Ikev2CreateID(IKEv2_DH_ID_IPV4_ADDR, ip_data, true);
-				}
-				else {
-					Dbg("EAP: Using existing IDr");
-					ip_data = IDr->data;
-				}
+		Dbg("Got 1 payload, NOT EAP NOR AUTH");
+		goto end;
+	}
 
-				BUF* signed_octets_r = IKEv2ComputeSignedOctets(SA->succ_response, SA->nonce_i, param->setting->prf, param->key_data->sk_pr, param->setting->prf->key_size, ip_data);
-				if (signed_octets_r != NULL) {
-					Dbg("EAP: Responder signed octets calculated");
-					BUF* auth_r_calced = IKEv2CalcAuth(param->setting->prf, ike->ike_server->Secret, strlen(ike->ike_server->Secret), "Key Pad for IKEv2", 17, signed_octets_r);
-					if (auth_r_calced != NULL) {
-						Dbg("AUTH_r calced");
-						Dbg("EAP: Auth field calculated, size=%u", auth_r_calced->Size);
-						IKEv2_PACKET_PAYLOAD* auth_r = Ikev2CreateAuth(IKEv2_AUTH_SHARED_KEY_MESSAGE_INTEGRITY_CODE, auth_r_calced);
+	if (!(pIDi == NULL || pSAi == NULL || pTSi == NULL || pTSr == NULL)) {
+		IKEv2_ID_PAYLOAD* IDi = pIDi->data;
+		IKEv2_SA_PAYLOAD* SAi = pSAi->data;
+		// Skip this for now
+		IKEv2_TS_PAYLOAD* TSi = pTSi->data;
+		IKEv2_TS_PAYLOAD* TSr = pTSr->data;
+		IKEv2_CP_PAYLOAD* CPi = (pCPi == NULL) ? NULL : pCPi->data;
 
-						BUF* info = NewBuf();
-						IKEv2_PACKET_PAYLOAD* eap = Ikev2CreateEAP(1, 0, 0, info);
-						FreeBuf(info);
+		//EAP start found
+		if (pAUTHi == NULL) {
+			// EAP is temporally disabled with mock
+			Dbg("EAP: disabled");
+			/* LIST* send_list = NewList(NULL); */
+			IKEv2_PACKET_PAYLOAD* mock = Ikev2CreateNotify(IKEv2_AUTHENTICATION_FAILED, NULL, NewBuf(), false);
+			LIST* to_send = NewListSingle(mock);
+			IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, SPIr, IKEv2_AUTH, true, false, false, packet->MessageId, to_send);
+			Dbg("EAP: Sending packet...");
+			Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, param);
+			return;
+			// EAP mock end
 
-						LIST* send_list = NewList(NULL);
-						Add(send_list, pIDr);
-						Add(send_list, auth_r);
-						Add(send_list, eap);
+			Dbg("EAP found, let's fuck");
 
-						Dbg("EAP: Creating SK payload with payload count=%u", send_list->num_item);
-						IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(send_list, param);
-						((IKEv2_SK_PAYLOAD*)sk->data)->integ_len = param->setting->integ->out_size;
-						Dbg("EAP: SK payload created!");
+			IKEv2_ID_PAYLOAD* IDi = pIDi->data;
+			Dbg("EAP: IDi type: %u", IDi->ID_type);
+			DbgBuf("EAP: IDi", IDi->data);
+			IKEv2_ID_PAYLOAD* IDr = (pIDr == NULL) ? NULL : pIDr->data;
+			IKEv2_SA_PAYLOAD* SAi = pSAi->data;
+			// Skip this for now
+			IKEv2_TS_PAYLOAD* TSi = pTSi->data;
+			IKEv2_TS_PAYLOAD* TSr = pTSr->data;
 
-						Dbg("EAP: Freeing send_list");
-						//Ikev2FreePayload(auth_r);
-						//Free(auth_r);
-						Dbg("");
-						if (IDr == NULL) {
-							Dbg("Freeing pIDr");
-							Ikev2FreePayload(pIDr);
-							Dbg("");
-							Free(pIDr);
-						}
+			// Comment this for now
+			//SA->eap_sa = SAi; 
+			SA->TSi = TSi;
+			SA->TSr = TSr;
 
-						//Ikev2FreePayload(eap);
-						//Free(eap);
-						ReleaseList(send_list);
-
-						LIST* sk_list = NewList(NULL);
-						Add(sk_list, sk);
-						Dbg("EAP: Creating packet for transmission...");
-						IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_AUTH, true, false, false, packet->MessageId, sk_list);
-						Dbg("EAP: Sending packet...");
-						Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, param);
-						Dbg("EAP: Packet sent, size=%u, OK\nReleasing all structures...", to_send->MessageSize);
-						Dbg("Freeing packet to_send with payload count %u", LIST_NUM(to_send->PayloadList));
-						/* Ikev2FreePacket(to_send); */
-						//Ikev2FreePayload(sk);
-						/* Dbg(""); */
-
-
-						//ReleaseList(sk_list);
-						Dbg("");
-						FreeBuf(auth_r_calced);
-					}
-				}
+			BUF* ip_data = NULL;
+			if (IDr == NULL) {
+				Dbg("EAP: Creating new IDr");
+				IP* myIP = &(SA->client->server_ip);
+				ip_data = NewBufFromMemory(myIP->addr, 4);
+				DbgBuf("EAP: ip_data", ip_data);
+				pIDr = Ikev2CreateID(IKEv2_DH_ID_IPV4_ADDR, ip_data, true);
 			}
 			else {
-				IKEv2_ID_PAYLOAD* IDi = pIDi->data;
-				IKEv2_ID_PAYLOAD* IDr = (pIDr == NULL) ? NULL : pIDr->data;
-				IKEv2_AUTH_PAYLOAD* AUTHi = pAUTHi->data;
-				IKEv2_SA_PAYLOAD* SAi = pSAi->data;
-				// Skip this for now
-				IKEv2_TS_PAYLOAD* TSi = pTSi->data;
-				IKEv2_TS_PAYLOAD* TSr = pTSr->data;
+				Dbg("EAP: Using existing IDr");
+				ip_data = IDr->data;
+			}
 
-				BUF* id_data = ikev2_ID_encode(IDi);
-				/*Dbg("IDi: type %u, size %u", IDi->ID_type, IDi->data->Size);
-				DbgBuf("IDi: ", IDi->data);
-				if (IDr != NULL) {
-					Dbg("IDr: type %u, %u", IDr->ID_type, IDr->data->Size);
-					DbgBuf("IDr: ", IDr->data);
-				}*/
+			BUF* signed_octets_r = IKEv2ComputeSignedOctets(SA->succ_response, SA->nonce_i, param->setting->prf, param->key_data->sk_pr, param->setting->prf->key_size, ip_data);
+			if (signed_octets_r != NULL) {
+				Dbg("EAP: Responder signed octets calculated");
+				BUF* auth_r_calced = IKEv2CalcAuth(param->setting->prf, ike->ike_server->Secret, strlen(ike->ike_server->Secret), "Key Pad for IKEv2", 17, signed_octets_r);
+				if (auth_r_calced != NULL) {
+					Dbg("AUTH_r calced");
+					Dbg("EAP: Auth field calculated, size=%u", auth_r_calced->Size);
+					IKEv2_PACKET_PAYLOAD* auth_r = Ikev2CreateAuth(IKEv2_AUTH_SHARED_KEY_MESSAGE_INTEGRITY_CODE, auth_r_calced);
 
-				BUF* auth_i_integ = AUTHi->data;
-				if (AUTHi->auth_method != IKEv2_AUTH_SHARED_KEY_MESSAGE_INTEGRITY_CODE) {
-					Dbg("Auth method = %u is not supported, exiting", AUTHi->auth_method);
-				}
-				else {
-					//CHECK IF INITIATOR AUTH IS OK
-					Dbg("Checking initiator auth field");
-					BUF* signed_octets_i = IKEv2ComputeSignedOctets(SA->succ_request, SA->nonce_r, param->setting->prf, param->key_data->sk_pi, param->setting->prf->key_size, id_data);
-					if (signed_octets_i != NULL) {
-						Dbg("Signed octets computed with len=%u, OK", signed_octets_i->Size);
-						//DbgPointer("PSK", ike->ike_server->Secret, strlen(ike->ike_server->Secret));
-						BUF* auth_i_calced = IKEv2CalcAuth(param->setting->prf, ike->ike_server->Secret, strlen(ike->ike_server->Secret), "Key Pad for IKEv2", 17, signed_octets_i);
-						//DbgBuf("auth_i_calced", auth_i_calced);
-						//DbgBuf("auth_i_integ", auth_i_integ);
+					BUF* info = NewBuf();
+					IKEv2_PACKET_PAYLOAD* eap = Ikev2CreateEAP(1, 0, 0, info);
+					FreeBuf(info);
 
-						if (auth_i_calced != NULL && auth_i_calced->Size == auth_i_integ->Size &&
-							(Cmp(auth_i_calced->Buf, auth_i_integ->Buf, auth_i_integ->Size) == 0)) {
-							//It's ok, create new auth
-							FreeBuf(auth_i_calced);
-							Dbg("Auth calculate && matched, OK");
+					LIST* send_list = NewList(NULL);
+					Add(send_list, pIDr);
+					Add(send_list, auth_r);
+					Add(send_list, eap);
 
-							IKEv2_CRYPTO_SETTING* ipsec_setting = ZeroMalloc(sizeof(IKEv2_CRYPTO_SETTING));
-							IKEv2_PACKET_PAYLOAD* pSAr = Ikev2ChooseBestIKESA(ike, SAi, ipsec_setting, IKEv2_PROPOSAL_PROTOCOL_ESP);
-							if (pSAr != NULL) {
-								Dbg("Best IPSEC_SA chosen, OK");
-								Dbg("Choosen IPSEC_SA encr = %u with key_size = %u", ipsec_setting->encr->type, ipsec_setting->key_size);
-								IKEv2_CRYPTO_KEY_DATA* keymat = IKEv2CreateKeymatWithoutDHForChildSA(param->setting->prf, param->key_data->sk_d, SA->nonce_i, SA->nonce_r,
-									ipsec_setting->key_size, (ipsec_setting->integ == NULL) ? 0 : ipsec_setting->integ->key_size);
+					Dbg("EAP: Creating SK payload with payload count=%u", send_list->num_item);
+					IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(send_list, param);
+					((IKEv2_SK_PAYLOAD*)sk->data)->integ_len = param->setting->integ->out_size;
+					Dbg("EAP: SK payload created!");
 
-								if (keymat != NULL) {
-									Dbg("Keymat calculated");
-									IKEv2_SA_PAYLOAD* retSA = pSAr->data;
-									UINT retSASPI = ReadBufInt((((IKEv2_SA_PROPOSAL*)(LIST_DATA(retSA->proposals, 0)))->SPI));
-									IKEv2_IPSECSA* ipsec_newSA = Ikev2CreateIPsecSA(retSASPI, SA, keymat, ipsec_setting);
-									Add(ike->ipsec_SAs, ipsec_newSA);
-
-									BUF* ip_data = NULL;
-									if (IDr == NULL) {
-										Dbg("Creating new IDr");
-										IP* myIP = &SA->client->server_ip;
-										ip_data = NewBufFromMemory(myIP->addr, 4);
-										pIDr = Ikev2CreateID(IKEv2_DH_ID_IPV4_ADDR, ip_data, true);
-									}
-									else {
-										ip_data = IDr->data;
-									}
-
-									BUF* id_data_r = ikev2_ID_encode(pIDr->data);
-									BUF* signed_octets_r = IKEv2ComputeSignedOctets(SA->succ_response, SA->nonce_i, param->setting->prf, param->key_data->sk_pr, param->setting->prf->key_size, id_data_r);
-									FreeBuf(id_data_r);
-									if (signed_octets_r != NULL) {
-										Dbg("Responder signed octets calculated");
-										BUF* auth_r_calced = IKEv2CalcAuth(param->setting->prf, ike->ike_server->Secret, strlen(ike->ike_server->Secret), "Key Pad for IKEv2", 17, signed_octets_r);
-										if (auth_r_calced != NULL) {
-											Dbg("Auth field calculated, size=%u", auth_r_calced->Size);
-											IKEv2_PACKET_PAYLOAD* auth_r = Ikev2CreateAuth(IKEv2_AUTH_SHARED_KEY_MESSAGE_INTEGRITY_CODE, auth_r_calced);
-											IKEv2_CP_PAYLOAD* cpg = peer_cfg->data;
-
-											LIST* send_list = NewListFast(NULL);
-											Add(send_list, pIDr);
-											Add(send_list, auth_r);
-											
-											IKEv2_PACKET_PAYLOAD* cp = (cpg->type == IKEv2_CP_CFG_REQUEST) ?
-																Ikev2CreateCPReply(ike, cpg) : NULL;
-											if (cp != NULL) {
-												Add(send_list, cp);
-											}
-
-											//TSi->TS_count = 1;
-											//Delete(TSi->selectors, LIST_DATA(TSi->selectors, 1));
-											//TSr->TS_count = 1;
-											//Delete(TSr->selectors, LIST_DATA(TSr->selectors, 1));
-
-											Add(send_list, pSAr);
-											//Add(send_list, pTSi);
-											IKEv2_PACKET_PAYLOAD* newTSi = Ikev2CreateTSr(ike, TSr);
-											newTSi->PayloadType = IKEv2_TSi_PAYLOAD_T;
-											Add(send_list, newTSi);
-
-											IKEv2_PACKET_PAYLOAD* newTSr = Ikev2CreateTSr(ike, TSr);
-											IKEv2_TRAFFIC_SELECTOR* sel = LIST_DATA(((IKEv2_TS_PAYLOAD*)(newTSr->data))->selectors, 0);
-											BUF* start = NewBuf();
-											WriteBufChar(start, (UCHAR)95);
-											WriteBufChar(start, (UCHAR)0);
-											WriteBufChar(start, (UCHAR)0);
-											WriteBufChar(start, (UCHAR)0);
-											sel->start_address = start;
-											
-											BUF* end = NewBuf();
-											WriteBufChar(end, (UCHAR)95);
-											WriteBufChar(end, (UCHAR)255);
-											WriteBufChar(end, (UCHAR)255);
-											WriteBufChar(end, (UCHAR)255);
-											sel->end_address = end;
-
-											Add(send_list, newTSr);
-											//Add(send_list, pTSr);
-											if (is_initial_contact == true) {
-												IKEv2_PACKET_PAYLOAD* init_contact = Ikev2CreateNotify(IKEv2_INITIAL_CONTACT, NULL, NewBuf(), false);
-												Add(send_list, init_contact);
-											}
-
-											if (is_tfc_padding == true) {
-												IKEv2_PACKET_PAYLOAD* tfc = Ikev2CreateNotify(IKEv2_ESP_TFC_PADDING_NOT_SUPPORTED, NULL, NewBuf(), false);
-												Add(send_list, tfc);
-											}
-
-											SA->hasEstablished = true;
-
-											Dbg("Creating SK payload with payload count=%u", send_list->num_item);
-											IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(send_list, param);
-											//((IKEv2_SK_PAYLOAD*)sk->data)->integ_len = param->setting->integ->out_size;
-
-											Dbg("SK payload created!");
-											LIST* sk_list = NewListSingle(sk);
-											Dbg("Creating packet for transmission...");
-											IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_AUTH, true, false, false, packet->MessageId, sk_list);
-											Dbg("Sending packet...");
-											Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, param);
-											Dbg("Packet sent, size=%u, OK\nReleasing all structures...", to_send->MessageSize);
-
-											Ikev2FreePacket(to_send);
-											//Ikev2FreePayload(sk);
-											//Ikev2FreePayload(auth_r);
-
-											//ReleaseList(sk_list);
-											ReleaseList(send_list);
-
-											FreeBuf(auth_r_calced);
-										}
-										FreeBuf(signed_octets_r);
-									}
-
-									if (IDr == NULL) {
-										Dbg("IDr is null");
-										//Ikev2FreePayload(pIDr);
-									}
-								}
-
-								//Ikev2FreePayload(pSAr);
-							}
-						}
-
-						FreeBuf(signed_octets_i);
+					Dbg("EAP: Freeing send_list");
+					//Ikev2FreePayload(auth_r);
+					//Free(auth_r);
+					Dbg("");
+					if (IDr == NULL) {
+						Dbg("Freeing pIDr");
+						Ikev2FreePayload(pIDr);
+						Dbg("");
+						Free(pIDr);
 					}
+
+					//Ikev2FreePayload(eap);
+					//Free(eap);
+					ReleaseList(send_list);
+
+					LIST* sk_list = NewList(NULL);
+					Add(sk_list, sk);
+					Dbg("EAP: Creating packet for transmission...");
+					IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_AUTH, true, false, false, packet->MessageId, sk_list);
+					Dbg("EAP: Sending packet...");
+					Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, param);
+					Dbg("EAP: Packet sent, size=%u, OK\nReleasing all structures...", to_send->MessageSize);
+					Dbg("Freeing packet to_send with payload count %u", LIST_NUM(to_send->PayloadList));
+					/* Ikev2FreePacket(to_send); */
+					//Ikev2FreePayload(sk);
+					/* Dbg(""); */
+
+
+					//ReleaseList(sk_list);
+					Dbg("");
+					FreeBuf(auth_r_calced);
 				}
 			}
 		}
 		else {
-			if (pIDi == NULL) {
-				Dbg("IDi == NULL");
+			// Typical response
+			IKEv2_ID_PAYLOAD* IDr = (pIDr == NULL) ? NULL : pIDr->data;
+			IKEv2_AUTH_PAYLOAD* AUTHi = pAUTHi->data;
+			
+			Dbg("IDi: type %u, size %u", IDi->ID_type, IDi->data->Size);
+			DbgBuf("IDi: ", IDi->data);
+
+			if (AUTHi->auth_method != IKEv2_AUTH_SHARED_KEY_MESSAGE_INTEGRITY_CODE) {
+				Dbg("Auth method = %u is not supported, exiting", AUTHi->auth_method);
+				goto end;
 			}
-			if (pTSi == NULL) {
-				Dbg("pTSi == NULL");
+
+			//CHECK IF INITIATOR AUTH IS OK
+			BUF* id_data = ikev2_ID_encode(IDi);
+			BUF* signed_octets_i = IKEv2ComputeSignedOctets(SA->succ_request, SA->nonce_r, param->setting->prf, param->key_data->sk_pi, param->setting->prf->key_size, id_data);
+			FreeBuf(id_data);
+
+			if (signed_octets_i == NULL) {
+				Dbg("Initiator signed octets == NULL");
+				goto end;
 			}
-			if (pTSr == NULL) {
-				Dbg("pTSr == NULL");
+
+			BUF* auth_i_integ = AUTHi->data;
+			BUF* auth_i_calced = IKEv2CalcAuth(param->setting->prf, ike->ike_server->Secret, strlen(ike->ike_server->Secret), "Key Pad for IKEv2", 17, signed_octets_i);
+			FreeBuf(signed_octets_i);
+
+			if (auth_i_calced == NULL || auth_i_calced->Size != auth_i_integ->Size ||
+				(Cmp(auth_i_calced->Buf, auth_i_integ->Buf, auth_i_integ->Size) != 0)) {
+				Dbg("Calced AUTH value doesn't match with AUTH_I");
+				if (auth_i_calced != NULL) {
+					FreeBuf(auth_i_calced);
+				}
+
+				goto end;
 			}
-			if (pSAi == NULL) {
-				Dbg("pSAi == NULL");
+
+			//It's ok, create new auth
+			FreeBuf(auth_i_calced);
+
+			IKEv2_CRYPTO_SETTING* ipsec_setting = ZeroMalloc(sizeof(IKEv2_CRYPTO_SETTING));
+			IKEv2_PACKET_PAYLOAD* pSAr = Ikev2ChooseBestIKESA(ike, SAi, ipsec_setting, IKEv2_PROPOSAL_PROTOCOL_ESP);
+			if (pSAr == NULL) {
+				// Maybe should reply with Informational msg
+				Dbg("IPSEC_SA is not chosen");
+				Free(ipsec_setting);
+
+				goto end;
 			}
+
+			Dbg("Choosen IPSEC_SA encr = %u with key_size = %u", ipsec_setting->encr->type, ipsec_setting->key_size);
+			IKEv2_CRYPTO_KEY_DATA* keymat = IKEv2CreateKeymatWithoutDHForChildSA(param->setting->prf, param->key_data->sk_d, SA->nonce_i, SA->nonce_r,
+				ipsec_setting->key_size, (ipsec_setting->integ == NULL) ? 0 : ipsec_setting->integ->key_size);
+
+			if (keymat == NULL) {
+				Dbg("Keymat is NULL");
+				Free(ipsec_setting);
+				Ikev2FreePayload(pSAr);
+
+				goto end;
+			}
+
+			if (IDr == NULL) {
+				Dbg("Creating new IDr");
+				BUF* ip_data = NewBufFromMemory(myIP.addr, 4);
+				pIDr = Ikev2CreateID(IKEv2_DH_ID_IPV4_ADDR, ip_data, true); // Because it's NULL
+				FreeBuf(ip_data);
+			}
+
+			BUF* id_data_r = ikev2_ID_encode(pIDr->data);
+			BUF* signed_octets_r = IKEv2ComputeSignedOctets(SA->succ_response, SA->nonce_i, param->setting->prf, param->key_data->sk_pr, param->setting->prf->key_size, id_data_r);
+			FreeBuf(id_data_r);
+
+			if (signed_octets_r == NULL) {
+				Dbg("Responder signed octets == NULL");
+				Free(ipsec_setting);
+				Ikev2FreePayload(pSAr);
+				Ikev2FreeCryptoKeyData(keymat);
+				if (IDr == NULL) {
+					Ikev2FreePayload(pIDr);
+				}
+
+				goto end;
+			}
+
+			BUF* auth_r_calced = IKEv2CalcAuth(param->setting->prf, ike->ike_server->Secret, strlen(ike->ike_server->Secret), "Key Pad for IKEv2", 17, signed_octets_r);
+			FreeBuf(signed_octets_r);
+
+			if (auth_r_calced == NULL) {
+				Dbg("Calced responder AUTH == NULL");
+				Free(ipsec_setting);
+				Ikev2FreePayload(pSAr);
+				Ikev2FreeCryptoKeyData(keymat);
+				if (IDr == NULL) {
+					Ikev2FreePayload(pIDr);
+				}
+
+				goto end;
+			}
+
+			IKEv2_SA_PAYLOAD* retSA = pSAr->data;
+			UINT retSASPI = ReadBufInt((((IKEv2_SA_PROPOSAL*)(LIST_DATA(retSA->proposals, 0)))->SPI));
+			IKEv2_IPSECSA* ipsec_newSA = Ikev2CreateIPsecSA(retSASPI, SA, keymat, ipsec_setting);
+			Add(ike->ipsec_SAs, ipsec_newSA);
+			SA->hasEstablished = true;
+
+			IKEv2_PACKET_PAYLOAD* auth_r = Ikev2CreateAuth(IKEv2_AUTH_SHARED_KEY_MESSAGE_INTEGRITY_CODE, auth_r_calced);
+			FreeBuf(auth_r_calced);
+
+			LIST* send_list = NewListFast(NULL);
+			Add(send_list, pIDr);
+			Add(send_list, auth_r);
+
+			IKEv2_PACKET_PAYLOAD* cp = (CPi->type == IKEv2_CP_CFG_REQUEST) ? Ikev2CreateCPReply(ike, CPi) : NULL;
+			if (cp != NULL) {
+				Add(send_list, cp);
+			}
+
+			Add(send_list, pSAr);
+
+			IKEv2_PACKET_PAYLOAD* newTSi = Ikev2CreateTSr(ike, TSr);
+			newTSi->PayloadType = IKEv2_TSi_PAYLOAD_T;
+			Add(send_list, newTSi);
+
+			IKEv2_PACKET_PAYLOAD* newTSr = Ikev2CreateTSr(ike, TSr);
+			IKEv2_TRAFFIC_SELECTOR* sel = LIST_DATA(((IKEv2_TS_PAYLOAD*)(newTSr->data))->selectors, 0);
+			BUF* start = NewBuf();
+			WriteBufChar(start, (UCHAR)95);
+			WriteBufChar(start, (UCHAR)0);
+			WriteBufChar(start, (UCHAR)0);
+			WriteBufChar(start, (UCHAR)0);
+			sel->start_address = start;
+
+			BUF* end = NewBuf();
+			WriteBufChar(end, (UCHAR)95);
+			WriteBufChar(end, (UCHAR)255);
+			WriteBufChar(end, (UCHAR)255);
+			WriteBufChar(end, (UCHAR)255);
+			sel->end_address = end;
+
+			Add(send_list, newTSr);
+
+			BUF* tfcMsg = NewBuf();
+			IKEv2_PACKET_PAYLOAD* noTFC = Ikev2CreateNotify(IKEv2_ESP_TFC_PADDING_NOT_SUPPORTED, NULL, tfcMsg, false);
+			FreeBuf(tfcMsg);
+			Add(send_list, noTFC);
+
+			Dbg("Creating SK payload with payload count == %u", LIST_NUM(send_list));
+			IKEv2_PACKET_PAYLOAD* sk = Ikev2CreateSK(send_list, param);
+			
+			LIST* sk_list = NewListSingle(sk);
+			IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_AUTH, true, false, false, packet->MessageId, sk_list);
+			Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, param);
+			
+			Ikev2FreePacket(to_send);
+			
+			ReleaseList(send_list);
+			Ikev2FreePayload(auth_r);
+			if (IDr == NULL) {
+				Dbg("IDr is null");
+				Ikev2FreePayload(pIDr);
+			}
+			if (cp != NULL) {
+				Ikev2FreePayload(cp);
+			}
+			Ikev2FreePayload(newTSi);
+			Ikev2FreePayload(newTSr);
+			Ikev2FreePayload(noTFC);
 		}
 	}
 
-	Dbg("Free && exit from SA_AUTH");
+end:
+	Dbg("SA_AUTH: exit");
 }
 
 void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET *p) {
@@ -3112,39 +3192,39 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateSK(LIST* payloads, IKEv2_CRYPTO_PARAM* cparam) 
 	return ret;
 }
 
-IKEv2_PACKET_PAYLOAD* Ikev2CreateID (UCHAR type, BUF* buf, bool is_responder) {
-  UCHAR ptype = IKEv2_IDi_PAYLOAD_T;
-  if (is_responder) {
-    ptype = IKEv2_IDr_PAYLOAD_T;
-  }
+IKEv2_PACKET_PAYLOAD* Ikev2CreateID(UCHAR type, BUF* buf, bool is_responder) {
+	UCHAR ptype = IKEv2_IDi_PAYLOAD_T;
+	if (is_responder) {
+		ptype = IKEv2_IDr_PAYLOAD_T;
+	}
 
-  IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(ptype, sizeof(IKEv2_ID_PAYLOAD));
-  if (payload == NULL) {
-    Debug("%s:%d error: failed to allocate mem %d\n", __func__, __LINE__,
-       sizeof(IKEv2_PACKET_PAYLOAD));
-    return NULL;
-  }
+	IKEv2_PACKET_PAYLOAD* payload = Ikev2CreatePacketPayload(ptype, sizeof(IKEv2_ID_PAYLOAD));
+	if (payload == NULL) {
+		Debug("%s:%d error: failed to allocate mem %d\n", __func__, __LINE__,
+			sizeof(IKEv2_PACKET_PAYLOAD));
+		return NULL;
+	}
 
-  IKEv2_ID_PAYLOAD* id = (IKEv2_ID_PAYLOAD*)payload->data;
+	IKEv2_ID_PAYLOAD* id = (IKEv2_ID_PAYLOAD*)payload->data;
 
-  switch (type) {
-    case IKEv2_DH_ID_IPV4_ADDR:
-    case IKEv2_DH_ID_FQDN:
-    case IKEv2_DH_ID_RFC822_ADDR:
-    case IKEv2_DH_ID_IPV6_ADDR:
-    case IKEv2_DH_ID_DER_ASN1_DN:
-    case IKEv2_DH_ID_DER_ASN1_GN:
-    case IKEv2_DH_ID_KEY_ID:
-      id->ID_type = type;
-      id->data = CloneBuf(buf);
-      break;
-    default:
-      Ikev2FreePayload(payload);
-      Debug("trying to set unsupported ID response type %d\n", type);
-      return NULL;
-  }
+	switch (type) {
+	case IKEv2_DH_ID_IPV4_ADDR:
+	case IKEv2_DH_ID_FQDN:
+	case IKEv2_DH_ID_RFC822_ADDR:
+	case IKEv2_DH_ID_IPV6_ADDR:
+	case IKEv2_DH_ID_DER_ASN1_DN:
+	case IKEv2_DH_ID_DER_ASN1_GN:
+	case IKEv2_DH_ID_KEY_ID:
+		id->ID_type = type;
+		id->data = CloneBuf(buf);
+		break;
+	default:
+		Ikev2FreePayload(payload);
+		Dbg("Trying to set unsupported ID response type %u\n", type);
+		return NULL;
+	}
 
-  return payload;
+	return payload;
 }
 
 IKEv2_PACKET_PAYLOAD* Ikev2CreateNotify (USHORT type, BUF* spi, BUF* message, bool contains_child_sa) {
