@@ -16,7 +16,7 @@ void Ikev2GetNotifications(IKEv2_NOTIFY_CONTAINER* c, LIST* payloads) {
 		return;
 	}
 
-	UINT ntfCount = LIST_COUNT(allNtf);
+	UINT ntfCount = LIST_NUM(allNtf);
 	for (UINT i = 0; i < ntfCount; ++i) {
 		IKEv2_NOTIFY_PAYLOAD* ntf = ((IKEv2_PACKET_PAYLOAD*)LIST_DATA(allNtf, i))->data;
 
