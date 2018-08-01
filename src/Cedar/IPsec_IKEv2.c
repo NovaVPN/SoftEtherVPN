@@ -754,6 +754,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 		switch (attr->type) {
 		case IKEv2_INTERNAL_IP4_ADDRESS:
 			if (attr->length > 0) {
+				Dbg("Using asked IP address");
 				add->length = attr->length;
 				add->value = CloneBuf(attr->value);
 				break;
@@ -770,15 +771,15 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 				add->value = NewBufFromMemory(ip.addr, 4);
 			}
 			break;
-		case IKEv2_INTERNAL_IP4_NETMASK:
+		//case IKEv2_INTERNAL_IP4_NETMASK:
 			// FOUND CORRECT NETMASK
-			add->length = 4;
+			/*add->length = 4;
 			UCHAR* resm = Malloc(4);
 			resm[0] = (UCHAR)255;
 			resm[1] = resm[2] = resm[3] = 0;
 			add->value = NewBufFromMemory(resm, 4);
-			DbgBuf("VALUE: ", add->value);
-			break;
+			DbgBuf("VALUE: ", add->value);*/
+			//break;
 		case IKEv2_INTERNAL_IP4_NBNS:
 			Dbg("Asking for NetBios Name Server, skipping");
 			if (attr->length > 0) {
@@ -791,6 +792,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			add->length = strlen(text);
 			add->value = NewBufFromMemory(text, attr->length);
 		}
+		case IKEv2_INTERNAL_IP4_NETMASK:
 		case IKEv2_INTERNAL_IP4_DNS:
 		case IKEv2_INTERNAL_IP4_DHCP:
 		default:
