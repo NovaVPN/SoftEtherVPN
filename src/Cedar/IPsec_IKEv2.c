@@ -540,11 +540,13 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 							IPToStr(dststr, 64, &dst);
 							IPToStr(srcstr, 64, &src);
 							Dbg("Source: %s, destination: %s", dststr, srcstr);
-
+							Dbg("Proto = %u", pkt->L3.IPv4Header->Protocol);
 							if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) == 0)
 							{
+								Dbg("Offset is 0");
 								if ((IPV4_GET_FLAGS(pkt->L3.IPv4Header) & 0x01) == 0)
 								{
+									Dbg("Flags are ok");
 									if (pkt->L3.IPv4Header->Protocol == IPSEC_IP_PROTO_ETHERIP)
 									{
 										Dbg("L3IPv3 EtherIP");
