@@ -771,15 +771,19 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 				add->value = NewBufFromMemory(ip.addr, 4);
 			}
 			break;
-		//case IKEv2_INTERNAL_IP4_NETMASK:
-			// FOUND CORRECT NETMASK
-			/*add->length = 4;
-			UCHAR* resm = Malloc(4);
-			resm[0] = (UCHAR)255;
-			resm[1] = resm[2] = resm[3] = 0;
-			add->value = NewBufFromMemory(resm, 4);
-			DbgBuf("VALUE: ", add->value);*/
-			//break;
+		case IKEv2_INTERNAL_IP4_NETMASK:
+			add->length = 4;
+			IP mask;
+			SetIP(&mask, 255, 255, 255, 0);
+			add->value = NewBufFromMemory(mask.addr, 4);
+			DbgBuf("VALUE: ", add->value);
+			break;
+		case IKEv2_INTERNAL_IP4_DNS:
+			add->length = 4;
+			IP dns;
+			SetIP(&dns, 8, 8, 8, 8);
+			add->value = NewBufFromMemory(dns.addr, 4);
+			break;
 		case IKEv2_INTERNAL_IP4_NBNS:
 			Dbg("Asking for NetBios Name Server, skipping");
 			if (attr->length > 0) {
@@ -790,10 +794,19 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 		case IKEv2_APPLICATION_VERSION: {
 			char text[] = "SoftEther IKEv2";
 			add->length = strlen(text);
-			add->value = NewBufFromMemory(text, attr->length);
+			add->value = NewBufFromMemory(text, add->length);
 		}
-		case IKEv2_INTERNAL_IP4_NETMASK:
-		case IKEv2_INTERNAL_IP4_DNS:
+		case IKEv2_INTERNAL_IP4_SUBNET:
+			add->length = 8;
+			IP sip, mip;
+			SetIP(&sip, 10, 10, 10, 10);
+			SetIP(&mip, 255, 255, 255, 0);
+			UCHAR* r = ZeroMalloc(8);
+			Copy(r, sip.addr, 4);
+			Copy(r + 4, mip.addr, 4);
+			add->value = NewBufFromMemory(r, 8);
+			Free(r);
+			break;
 		case IKEv2_INTERNAL_IP4_DHCP:
 		default:
 			add->length = attr->length;
@@ -1480,24 +1493,21 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 
 			IKEv2_PACKET_PAYLOAD* newTSi = Ikev2CreateTSr(ike, TSr);
 			newTSi->PayloadType = IKEv2_TSi_PAYLOAD_T;
+			IKEv2_TRAFFIC_SELECTOR* seli = LIST_DATA(((IKEv2_TS_PAYLOAD*)(newTSi->data))->selectors, 0);
+			IP sip;
+			SetIP(&sip, 10, 10, 10, 10);
+			seli->start_address = NewBufFromMemory(sip.addr, 4);
+			seli->end_address = NewBufFromMemory(sip.addr, 4);
 			Add(send_list, newTSi);
 
 			IKEv2_PACKET_PAYLOAD* newTSr = Ikev2CreateTSr(ike, TSr);
 			IKEv2_TRAFFIC_SELECTOR* sel = LIST_DATA(((IKEv2_TS_PAYLOAD*)(newTSr->data))->selectors, 0);
-			BUF* start = NewBuf();
-			WriteBufChar(start, (UCHAR)95);
-			WriteBufChar(start, (UCHAR)0);
-			WriteBufChar(start, (UCHAR)0);
-			WriteBufChar(start, (UCHAR)0);
-			sel->start_address = start;
+			IP rip;
+			SetIP(&rip, 0, 0, 0, 0);
+			sel->start_address = NewBufFromMemory(rip.addr, 4);
 
-			BUF* end = NewBuf();
-			WriteBufChar(end, (UCHAR)95);
-			WriteBufChar(end, (UCHAR)255);
-			WriteBufChar(end, (UCHAR)255);
-			WriteBufChar(end, (UCHAR)255);
-			sel->end_address = end;
-
+			SetIP(&rip, 255, 255, 255, 255);
+			sel->end_address = NewBufFromMemory(rip.addr, 4);
 			Add(send_list, newTSr);
 
 			BUF* tfcMsg = NewBuf();
