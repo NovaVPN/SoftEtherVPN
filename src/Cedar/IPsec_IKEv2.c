@@ -424,13 +424,14 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	}
 	seq = READ_UINT(src + sizeof(UINT));
 	Dbg("Seq: %u", seq);
-	is_tunnel_mode = IsIPsecSaTunnelMode(ipsec_sa);
+	//is_tunnel_mode = IsIPsecSaTunnelMode(ipsec_sa);
 
 	//c = ipsec_sa->IkeClient;
 
 	block_size = param->setting->encr->block_size;
 	hash_size = param->setting->integ->out_size;
 
+	Dbg("Block size = %u, hash_size = %u", block_size, hash_size);
 	// Get the IV
 	if (src_size < (sizeof(UINT) * 2 + block_size + hash_size + block_size))
 	{
@@ -466,12 +467,11 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	Dbg("OK, decrypting");
 
 	// Decrypt the payload data
-	iv = src + sizeof(UINT) * 2;
-	Copy(param->key_data->IV, iv, block_size);
+	param->key_data->IV = src + sizeof(UINT) * 2;
 	DbgPointer("IV", param->key_data->IV, block_size);
-	encrypted_payload_data[0] = 42;
+	//encrypted_payload_data[0] = 42;
 	dec = Ikev2Decrypt(encrypted_payload_data, size_of_payload_data, param);
-	Free(param->key_data->IV);
+	param->key_data->IV = NULL;
 	
 	Dbg("Decrypting ended");
 	if (dec != NULL)
@@ -1107,6 +1107,12 @@ IKEv2_CRYPTO_KEY_DATA* IKEv2CreateKeymatWithoutDHForChildSA(IKEv2_PRF* prf, void
 	IKEv2_CRYPTO_KEY_DATA* key_data = ZeroMalloc(sizeof(IKEv2_CRYPTO_KEY_DATA));
 	key_data->encr_key_size = encr_key_size;
 	key_data->integ_key_size = integ_key_size;
+	key_data->IV = NULL;
+
+	key_data->aes_key_e = key_data->aes_key_d = NULL;
+	key_data->des_key_e = key_data->des_key_d = NULL;
+	key_data->des3_key_e = key_data->des3_key_d = NULL;
+
 	UINT offset = 0;
 	key_data->sk_ei = res;
 	offset += encr_key_size;
