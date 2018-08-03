@@ -468,6 +468,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	// Decrypt the payload data
 	iv = src + sizeof(UINT) * 2;
 	Copy(param->key_data->IV, iv, block_size);
+	encrypted_payload_data[0] = 42;
 	dec = Ikev2Decrypt(encrypted_payload_data, size_of_payload_data, param);
 	Free(param->key_data->IV);
 	
