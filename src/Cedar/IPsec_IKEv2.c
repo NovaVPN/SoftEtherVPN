@@ -484,7 +484,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	UINT size_of_payload_data;
 	IKE_CRYPTO_PARAM cp;
 	BUF *dec;
-	bool is_tunnel_mode = true; // for now it's true
+	bool is_tunnel_mode = false; // for now it's true
 	
 	IKEv2_CRYPTO_PARAM* param = ipsec_sa->param;
 	// Get the sequence number
@@ -686,31 +686,34 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 			}
 			else
 			{
-				//// Transport mode
-				//if (next_header == IP_PROTO_UDP)
-				//{
-				//	if (ike->IPsec->Services.L2TP_IPsec || ike->IPsec->Services.EtherIP_IPsec)
-				//	{
-				//		// An UDP packet has been received
-				//		ProcIPsecUdpPacketRecv(ike, c, dec_data, dec_size);
-				//	}
-				//}
-				//else if (next_header == IPSEC_IP_PROTO_ETHERIP)
-				//{
-				//	if (ike->IPsec->Services.EtherIP_IPsec)
-				//	{
-				//		// An EtherIP packet has been received
-				//		ProcIPsecEtherIPPacketRecv(ike, c, dec_data, dec_size, false);
-				//	}
-				//}
-				//else if (next_header == IPSEC_IP_PROTO_L2TPV3)
-				//{
-				//	if (ike->IPsec->Services.EtherIP_IPsec)
-				//	{
-				//		// A L2TPv3 packet has been received
-				//		ProcL2TPv3PacketRecv(ike, c, dec_data, dec_size, false);
-				//	}
-				// }
+				// Transport mode
+				if (next_header == IP_PROTO_UDP)
+				{
+					Dbg("UDP");
+					//if (ike->IPsec->Services.L2TP_IPsec || ike->IPsec->Services.EtherIP_IPsec)
+					{
+						// An UDP packet has been received
+						Ikev2ProcIPsecUdpPacketRecv(ike, c, dec_data, dec_size);
+					}
+				}
+				else if (next_header == IPSEC_IP_PROTO_ETHERIP)
+				{
+					Dbg("EtherIP");
+					//if (ike->IPsec->Services.EtherIP_IPsec)
+					{
+						// An EtherIP packet has been received
+						ProcIPsecEtherIPPacketRecv(ike, c, dec_data, dec_size, false);
+					}
+				}
+				else if (next_header == IPSEC_IP_PROTO_L2TPV3)
+				{
+					Dbg("L2TPv3");
+					//if (ike->IPsec->Services.EtherIP_IPsec)
+					{
+						// A L2TPv3 packet has been received
+						ProcL2TPv3PacketRecv(ike, c, dec_data, dec_size, false);
+					}
+				 }
 			}
 
 			update_status = true;
