@@ -484,7 +484,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	UINT size_of_payload_data;
 	IKE_CRYPTO_PARAM cp;
 	BUF *dec;
-	bool is_tunnel_mode = false; // for now it's true
+	bool is_tunnel_mode = true; // for now it's true
 	
 	IKEv2_CRYPTO_PARAM* param = ipsec_sa->param;
 	// Get the sequence number
@@ -874,10 +874,10 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			DbgBuf("VALUE: ", add->value);
 			break;
 		case IKEv2_INTERNAL_IP4_DNS:
-			add->length = 4;
+			/*add->length = 4;
 			IP dns;
 			SetIP(&dns, 8, 8, 8, 8);
-			add->value = NewBufFromMemory(dns.addr, 4);
+			add->value = NewBufFromMemory(dns.addr, 4);*/
 			break;
 		case IKEv2_INTERNAL_IP4_NBNS:
 			Dbg("Asking for NetBios Name Server, skipping");
