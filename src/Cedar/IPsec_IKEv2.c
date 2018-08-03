@@ -535,10 +535,10 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 							IP dst, src;
 							UINTToIP(&dst, pkt->L3.IPv4Header->DstIP);
 							UINTToIP(&src, pkt->L3.IPv4Header->SrcIP);
-							UCHAR* dststr = ZeroMalloc(5);
-							UCHAR* srcstr = ZeroMalloc(5);
-							IPToStr(dststr, 4, &dst);
-							IPToStr(srcstr, 4, &src);
+							UCHAR* dststr = ZeroMalloc(65);
+							UCHAR* srcstr = ZeroMalloc(65);
+							IPToStr(dststr, 64, &dst);
+							IPToStr(srcstr, 64, &src);
 							Dbg("Source: %s, destination: %s", dststr, srcstr);
 
 							if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) == 0)
