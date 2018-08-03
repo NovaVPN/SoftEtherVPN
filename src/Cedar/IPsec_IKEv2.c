@@ -414,7 +414,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	UINT size_of_payload_data;
 	IKE_CRYPTO_PARAM cp;
 	BUF *dec;
-	bool is_tunnel_mode = false;
+	bool is_tunnel_mode = true; // for now it's true
 	
 	IKEv2_CRYPTO_PARAM* param = ipsec_sa->param;
 	// Get the sequence number
@@ -468,8 +468,6 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 
 	// Decrypt the payload data
 	param->key_data->IV = src + sizeof(UINT) * 2;
-	DbgPointer("IV", param->key_data->IV, block_size);
-	//encrypted_payload_data[0] = 42;
 	dec = Ikev2Decrypt(encrypted_payload_data, size_of_payload_data, param);
 	param->key_data->IV = NULL;
 	
@@ -488,112 +486,118 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 			Dbg("Got actual payloads");
 			UINT orig_size = dec_size - 2 - size_of_padding;
 
-//			ipsec_sa->TotalSize += dec_size;
-//
-//			if (is_tunnel_mode)
-//			{
-//				// Tunnel Mode
-//				if (next_header == IKE_PROTOCOL_ID_IPV4 || next_header == IKE_PROTOCOL_ID_IPV6)
-//				{
-//					// Check the contents by parsing the IPv4 / IPv6 header in the case of tunnel mode
-//					BUF *b = NewBuf();
-//					static UCHAR src_mac_dummy[6] = { 0, 0, 0, 0, 0, 0, };
-//					static UCHAR dst_mac_dummy[6] = { 0, 0, 0, 0, 0, 0, };
-//					USHORT tpid = Endian16(next_header == IKE_PROTOCOL_ID_IPV4 ? MAC_PROTO_IPV4 : MAC_PROTO_IPV6);
-//					PKT *pkt;
-//
-//					WriteBuf(b, src_mac_dummy, sizeof(src_mac_dummy));
-//					WriteBuf(b, dst_mac_dummy, sizeof(dst_mac_dummy));
-//					WriteBuf(b, &tpid, sizeof(tpid));
-//
-//					WriteBuf(b, dec_data, dec_size);
-//
-//					// Parse
-//					pkt = ParsePacket(b->Buf, b->Size);
-//
-//#ifdef	RAW_DEBUG
-//					IPsecIkeSendUdpForDebug(IPSEC_PORT_L2TP, 1, b->Buf, b->Size);
-//#endif	// RAW_DEBUG
-//
-//					if (pkt == NULL)
-//					{
-//						// Parsing failure
-//						dec_data = NULL;
-//						dec_size = 0;
-//					}
-//					else
-//					{
-//						// Parsing success
-//						switch (pkt->TypeL3)
-//						{
-//						case L3_IPV4:
-//							// Save the internal IP address information
-//							UINTToIP(&c->TunnelModeServerIP, pkt->L3.IPv4Header->DstIP);
-//							UINTToIP(&c->TunnelModeClientIP, pkt->L3.IPv4Header->SrcIP);
-//
-//							if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) == 0)
-//							{
-//								if ((IPV4_GET_FLAGS(pkt->L3.IPv4Header) & 0x01) == 0)
-//								{
-//									if (pkt->L3.IPv4Header->Protocol == IPSEC_IP_PROTO_ETHERIP)
-//									{
-//										// EtherIP
-//										if (ike->IPsec->Services.EtherIP_IPsec)
-//										{
-//											// An EtherIP packet has been received
-//											ProcIPsecEtherIPPacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize, true);
-//										}
-//									}
-//									else if (pkt->L3.IPv4Header->Protocol == IPSEC_IP_PROTO_L2TPV3)
-//									{
-//										// L2TPv3
-//										if (ike->IPsec->Services.EtherIP_IPsec)
-//										{
-//											// A L2TPv3 packet has been received
-//											ProcL2TPv3PacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize, true);
-//										}
-//									}
-//								}
-//							}
-//							break;
-//
-//						case L3_IPV6:
-//							// Save the internal IP address information
-//							SetIP6(&c->TunnelModeServerIP, pkt->IPv6HeaderPacketInfo.IPv6Header->DestAddress.Value);
-//							SetIP6(&c->TunnelModeClientIP, pkt->IPv6HeaderPacketInfo.IPv6Header->SrcAddress.Value);
-//
-//							if (pkt->IPv6HeaderPacketInfo.IsFragment == false)
-//							{
-//								if (pkt->IPv6HeaderPacketInfo.FragmentHeader == NULL || (IPV6_GET_FLAGS(pkt->IPv6HeaderPacketInfo.FragmentHeader) & IPV6_FRAGMENT_HEADER_FLAG_MORE_FRAGMENTS) == 0)
-//								{
-//									if (pkt->IPv6HeaderPacketInfo.Protocol == IPSEC_IP_PROTO_ETHERIP)
-//									{
-//										// EtherIP
-//										if (ike->IPsec->Services.EtherIP_IPsec)
-//										{
-//											// An EtherIP packet has been received
-//											ProcIPsecEtherIPPacketRecv(ike, c, pkt->IPv6HeaderPacketInfo.Payload, pkt->IPv6HeaderPacketInfo.PayloadSize, true);
-//										}
-//									}
-//									else if (pkt->IPv6HeaderPacketInfo.Protocol == IPSEC_IP_PROTO_L2TPV3)
-//									{
-//										// L2TPv3
-//										if (ike->IPsec->Services.EtherIP_IPsec)
-//										{
-//											// A L2TPv3 packet has been received
-//											ProcL2TPv3PacketRecv(ike, c, pkt->IPv6HeaderPacketInfo.Payload, pkt->IPv6HeaderPacketInfo.PayloadSize, true);
-//										}
-//									}
-//								}
-//							}
-//							break;
-//						}
-//
-//						FreePacket(pkt);
-//					}
-//
-//					FreeBuf(b);
-//				}
+			//			ipsec_sa->TotalSize += dec_size;
+			//
+			if (is_tunnel_mode)
+			{
+				// Tunnel Mode
+				if (next_header == IKE_PROTOCOL_ID_IPV4 || next_header == IKE_PROTOCOL_ID_IPV6)
+				{
+					// Check the contents by parsing the IPv4 / IPv6 header in the case of tunnel mode
+					BUF *b = NewBuf();
+					static UCHAR src_mac_dummy[6] = { 0, 0, 0, 0, 0, 0, };
+					static UCHAR dst_mac_dummy[6] = { 0, 0, 0, 0, 0, 0, };
+					USHORT tpid = Endian16(next_header == IKE_PROTOCOL_ID_IPV4 ? MAC_PROTO_IPV4 : MAC_PROTO_IPV6);
+					PKT *pkt;
+
+					WriteBuf(b, src_mac_dummy, sizeof(src_mac_dummy));
+					WriteBuf(b, dst_mac_dummy, sizeof(dst_mac_dummy));
+					WriteBuf(b, &tpid, sizeof(tpid));
+
+					WriteBuf(b, dec_data, dec_size);
+
+					// Parse
+					pkt = ParsePacket(b->Buf, b->Size);
+
+#ifdef	RAW_DEBUG
+					IPsecIkeSendUdpForDebug(IPSEC_PORT_L2TP, 1, b->Buf, b->Size);
+#endif	// RAW_DEBUG
+
+					if (pkt == NULL)
+					{
+						Dbg("Packet is NULL");
+						// Parsing failure
+						dec_data = NULL;
+						dec_size = 0;
+					}
+					else
+					{
+						Dbg("Parsing success");
+						// Parsing success
+						switch (pkt->TypeL3)
+						{
+						case L3_IPV4:
+							Dbg("IPv4");
+							// Save the internal IP address information
+							UINTToIP(&c->TunnelModeServerIP, pkt->L3.IPv4Header->DstIP);
+							UINTToIP(&c->TunnelModeClientIP, pkt->L3.IPv4Header->SrcIP);
+
+							if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) == 0)
+							{
+								if ((IPV4_GET_FLAGS(pkt->L3.IPv4Header) & 0x01) == 0)
+								{
+									if (pkt->L3.IPv4Header->Protocol == IPSEC_IP_PROTO_ETHERIP)
+									{
+										Dbg("L3IPv3 EtherIP");
+										// EtherIP
+										//if (ike->IPsec->Services.EtherIP_IPsec)
+										//{
+										//	// An EtherIP packet has been received
+										//	ProcIPsecEtherIPPacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize, true);
+										//}
+									}
+									else if (pkt->L3.IPv4Header->Protocol == IPSEC_IP_PROTO_L2TPV3)
+									{
+										Dbg("L3IPv3 L2TPV3");
+										// L2TPv3
+										//if (ike->IPsec->Services.EtherIP_IPsec)
+										//{
+										//	// A L2TPv3 packet has been received
+										//	ProcL2TPv3PacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize, true);
+										//}
+									}
+								}
+							}
+							break;
+
+						case L3_IPV6:
+							Dbg("IPv6");
+							// Save the internal IP address information
+							SetIP6(&c->TunnelModeServerIP, pkt->IPv6HeaderPacketInfo.IPv6Header->DestAddress.Value);
+							SetIP6(&c->TunnelModeClientIP, pkt->IPv6HeaderPacketInfo.IPv6Header->SrcAddress.Value);
+
+							if (pkt->IPv6HeaderPacketInfo.IsFragment == false)
+							{
+								if (pkt->IPv6HeaderPacketInfo.FragmentHeader == NULL || (IPV6_GET_FLAGS(pkt->IPv6HeaderPacketInfo.FragmentHeader) & IPV6_FRAGMENT_HEADER_FLAG_MORE_FRAGMENTS) == 0)
+								{
+									if (pkt->IPv6HeaderPacketInfo.Protocol == IPSEC_IP_PROTO_ETHERIP)
+									{
+										// EtherIP
+										//if (ike->IPsec->Services.EtherIP_IPsec)
+										//{
+										//	// An EtherIP packet has been received
+										//	ProcIPsecEtherIPPacketRecv(ike, c, pkt->IPv6HeaderPacketInfo.Payload, pkt->IPv6HeaderPacketInfo.PayloadSize, true);
+										//}
+									}
+									else if (pkt->IPv6HeaderPacketInfo.Protocol == IPSEC_IP_PROTO_L2TPV3)
+									{
+										// L2TPv3
+										//if (ike->IPsec->Services.EtherIP_IPsec)
+										//{
+										//	// A L2TPv3 packet has been received
+										//	ProcL2TPv3PacketRecv(ike, c, pkt->IPv6HeaderPacketInfo.Payload, pkt->IPv6HeaderPacketInfo.PayloadSize, true);
+										//}
+									}
+								}
+							}
+							break;
+						}
+
+						FreePacket(pkt);
+					}
+
+					FreeBuf(b);
+				}
 			}
 			else
 			{
@@ -625,9 +629,10 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 			}
 
 			update_status = true;
-		//}
+			//}
 
-		FreeBuf(dec);
+			FreeBuf(dec);
+		}
 	}
 	else {
 		Dbg("Decrypting failed");
@@ -2361,9 +2366,7 @@ BUF* Ikev2Decrypt(void* data, UINT size, IKEv2_CRYPTO_PARAM *cparam) {
 		break;
 	case IKEv2_TRANSFORM_ID_ENCR_AES_CBC:
 		if (key_data->aes_key_d == NULL) {
-			Dbg("Creating new AES_KEY_D");
 			key_data->aes_key_d = AesNewKey(key_data->sk_ei, key_data->encr_key_size);
-			DbgPointer("New aes_key_d == ", key_data->aes_key_d->KeyValue, key_data->aes_key_d->KeySize);
 		}
 		AesDecrypt(decoded, data, size, key_data->aes_key_d, key_data->IV);
 		break;
