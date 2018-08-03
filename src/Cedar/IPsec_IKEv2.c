@@ -468,6 +468,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	// Decrypt the payload data
 	iv = src + sizeof(UINT) * 2;
 	Copy(param->key_data->IV, iv, block_size);
+	DbgPointer("IV", param->key_data->IV, block_size);
 	encrypted_payload_data[0] = 42;
 	dec = Ikev2Decrypt(encrypted_payload_data, size_of_payload_data, param);
 	Free(param->key_data->IV);
@@ -2354,7 +2355,9 @@ BUF* Ikev2Decrypt(void* data, UINT size, IKEv2_CRYPTO_PARAM *cparam) {
 		break;
 	case IKEv2_TRANSFORM_ID_ENCR_AES_CBC:
 		if (key_data->aes_key_d == NULL) {
+			Dbg("Creating new AES_KEY_D");
 			key_data->aes_key_d = AesNewKey(key_data->sk_ei, key_data->encr_key_size);
+			DbgPointer("New aes_key_d == ", key_data->aes_key_d->KeyValue, key_data->aes_key_d->KeySize);
 		}
 		AesDecrypt(decoded, data, size, key_data->aes_key_d, key_data->IV);
 		break;
