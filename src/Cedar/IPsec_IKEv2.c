@@ -4,6 +4,76 @@
 #include "IPsec_IKEv2.h"
 #include "IPsec_Ikev2Packet.h"
 
+// An UDP packet has been received via the IPsec tunnel
+void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, UCHAR *data, UINT data_size)
+{
+	UDP_HEADER *u;
+	UINT payload_size;
+	UINT src_port, dst_port;
+	UINT packet_length;
+
+	if (data_size <= sizeof(UDP_HEADER))
+	{
+		// There is no UDP header or the data is 0 bytes
+		return;
+	}
+
+	// UDP header
+	u = (UDP_HEADER *)data;
+
+	packet_length = Endian16(u->PacketLength);
+
+	if (packet_length <= sizeof(UDP_HEADER))
+	{
+		return;
+	}
+
+	payload_size = packet_length - sizeof(UDP_HEADER);
+	Dbg("Payload size = %u", payload_size);
+	if (payload_size == 0)
+	{
+		// No data
+		return;
+	}
+
+	if (data_size < (sizeof(UDP_HEADER) + payload_size))
+	{
+		// Data is not followed
+		return;
+	}
+
+	src_port = Endian16(u->SrcPort);
+	dst_port = Endian16(u->DstPort);
+	Dbg("Dest port = %u", dst_port);
+	if (dst_port == IPSEC_PORT_L2TP)
+	{
+		Dbg("L2TP packet");
+		UDPPACKET p;
+		// A L2TP packet has been received
+		//IPsecIkeClientManageL2TPServer(ike, c);
+
+		//// Update Port number
+		//c->L2TPClientPort = src_port;
+
+		//// Pass the received packet to the L2TP server
+		//p.Type = 0;
+		//p.Data = data + sizeof(UDP_HEADER);
+		//p.DestPort = IPSEC_PORT_L2TP;
+		//Copy(&p.DstIP, &c->L2TPServerIP, sizeof(IP));
+		//p.Size = payload_size;
+		//Copy(&p.SrcIP, &c->L2TPClientIP, sizeof(IP));
+		//p.SrcPort = IPSEC_PORT_L2TP;
+
+		//ProcL2TPPacketRecv(c->L2TP, &p);
+
+		//Debug("IPsec UDP Recv: %u <= %u %u\n", dst_port, src_port, p.Size);
+
+#ifdef	RAW_DEBUG
+		IPsecIkeSendUdpForDebug(IPSEC_PORT_L2TP, 1, p.Data, p.Size);
+#endif	// RAW_DEBUG
+	}
+}
+
 void Ikev2GetNotifications(IKEv2_NOTIFY_CONTAINER* c, LIST* payloads) {
 	if (c == NULL || payloads == NULL) {
 		return;
@@ -547,6 +617,10 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 								if ((IPV4_GET_FLAGS(pkt->L3.IPv4Header) & 0x01) == 0)
 								{
 									Dbg("Flags are ok");
+									if (pkt->L3.IPv4Header->Protocol == 17) {
+										Ikev2ProcIPsecUdpPacketRecv(ike, c, dec_data, dec_size);
+									} else 
+
 									if (pkt->L3.IPv4Header->Protocol == IPSEC_IP_PROTO_ETHERIP)
 									{
 										Dbg("L3IPv3 EtherIP");
