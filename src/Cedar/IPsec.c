@@ -536,33 +536,33 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 	}
 
 	// Postproc IKEv2 packets
-	for (i = 0; i < LIST_NUM(ikev2->SendPacketList); ++i)
-	{
-		UDPPACKET *p = LIST_DATA(ikev2->SendPacketList, i);
-		Debug("Got packet with type %u, port %u %u to send, sending", p->Type, p->SrcPort, p->DestPort);
-		if (p->Type == IKE_UDP_TYPE_ISAKMP && p->SrcPort == IPSEC_PORT_IPSEC_ESP_UDP)
-		{
-			Debug("Encapsulating IKE packet");
-			// Add the Non-ESP Marker
-			void *old_data = p->Data;
+	//for (i = 0; i < LIST_NUM(ikev2->SendPacketList); ++i)
+	//{
+	//	UDPPACKET *p = LIST_DATA(ikev2->SendPacketList, i);
+	//	Debug("Got packet with type %u, port %u %u to send, sending", p->Type, p->SrcPort, p->DestPort);
+	//	if (p->Type == IKE_UDP_TYPE_ISAKMP && p->SrcPort == IPSEC_PORT_IPSEC_ESP_UDP)
+	//	{
+	//		Debug("Encapsulating IKE packet");
+	//		// Add the Non-ESP Marker
+	//		void *old_data = p->Data;
 
-			p->Data = AddHead(p->Data, p->Size, zero8, 4);
-			p->Size += 4;
+	//		p->Data = AddHead(p->Data, p->Size, zero8, 4);
+	//		p->Size += 4;
 
-			Free(old_data);
-		}
-		else if (p->Type == IKE_UDP_TYPE_ESP && p->SrcPort == IPSEC_PORT_IPSEC_ISAKMP)
-		{
-			Debug("Encapsulating ESP packet");
-			// Add the Non-IKE Marker
-			void *old_data = p->Data;
+	//		Free(old_data);
+	//	}
+	//	else if (p->Type == IKE_UDP_TYPE_ESP && p->SrcPort == IPSEC_PORT_IPSEC_ISAKMP)
+	//	{
+	//		Debug("Encapsulating ESP packet");
+	//		// Add the Non-IKE Marker
+	//		void *old_data = p->Data;
 
-			p->Data = AddHead(p->Data, p->Size, zero8, 8);
-			p->Size += 8;
+	//		p->Data = AddHead(p->Data, p->Size, zero8, 8);
+	//		p->Size += 8;
 
-			Free(old_data);
-		}
-	}
+	//		Free(old_data);
+	//	}
+	//}
 
 	// IKE server packet transmission processing
 	UdpListenerSendPackets(u, ike->SendPacketList);
