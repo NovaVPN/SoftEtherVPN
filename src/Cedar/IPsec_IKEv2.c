@@ -1132,8 +1132,8 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 
 		IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_SA_INIT, true, false, false, packet->MessageId, send_list);
 		if (newSA->isClientBehindNAT == true) {
-			Dbg("Sending packet through NAT");
 			client->client_port = IPSEC_PORT_IPSEC_ESP_UDP;
+			Dbg("Sending packet through NAT %u", client->client_port);
 		}
 		Ikev2SendPacket(ike, client, to_send, NULL);
 		newSA->succ_response = CloneBuf(to_send->ByteMsg);
@@ -4133,7 +4133,7 @@ void Ikev2SendPacketByAddress(IKEv2_SERVER* s, IP* srcIP, UINT srcPort, IP* dest
 		//Dbg("Exit from recursion run...");
 	}
 
-	Dbg("Packet built, creating UDPPACKET");
+	Dbg("Packet built, creating UDPPACKET, destPort = %u", destPort);
 	UDPPACKET* udp = NewUdpPacket(srcIP, srcPort, destIP, destPort, buf->Buf, buf->Size);
 	if (udp == NULL) {
 		Dbg("UDP packet is NULL");
