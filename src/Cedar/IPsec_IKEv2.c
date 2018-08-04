@@ -1060,7 +1060,7 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		void* dest = ZeroMalloc(20);
 		Sha1(dest, bSrc->Buf, bSrc->Size);
 		DbgPointer("CALCED_NAT_SOURCE_IP", dest, 20);
-		if (Cmp(dest, bsi->Buf, bsi->Size) != 0) {
+		if (Cmp(dest, bsi->Buf, bsi->Size) == 0) {
 			natted = false;
 		}
 
@@ -1072,12 +1072,12 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 
 		Sha1(dest, bDest->Buf, bDest->Size);
 		DbgPointer("CALCED_NAT_DESTINATION_IP", dest, 20);
-		if ((natted == true) && Cmp(dest, bdi->Buf, bdi->Size) != 0) {
+		if ((natted == true) && Cmp(dest, bdi->Buf, bdi->Size) == 0) {
 			natted = false;
 		}
 
 		isClientNAT = natted;
-		if (isClientNAT) {
+		if (isClientNAT == true) {
 			Dbg("NAT behind client detected");
 		}
 	}
