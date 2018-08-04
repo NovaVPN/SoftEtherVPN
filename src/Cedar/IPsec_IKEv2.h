@@ -110,6 +110,7 @@ typedef struct IKEv2_SA {
 	bool hasEstablished;
 	bool isClosed;
 	bool isRekeyed;
+	bool isClientBehindNAT;
 
 	BUF* succ_request;
 	BUF* succ_response;

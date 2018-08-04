@@ -542,6 +542,7 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 
 		if (p->Type == IKE_UDP_TYPE_ISAKMP && p->SrcPort == IPSEC_PORT_IPSEC_ESP_UDP)
 		{
+			Debug("Encapsulating IKE packet");
 			// Add the Non-ESP Marker
 			void *old_data = p->Data;
 
@@ -552,6 +553,7 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 		}
 		else if (p->Type == IKE_UDP_TYPE_ESP && p->SrcPort == IPSEC_PORT_IPSEC_ISAKMP)
 		{
+			Debug("Encapsulating ESP packet");
 			// Add the Non-IKE Marker
 			void *old_data = p->Data;
 

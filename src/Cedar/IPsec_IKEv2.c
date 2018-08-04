@@ -262,6 +262,7 @@ IKEv2_SA* Ikev2CreateSA(UINT64 SPIi, UINT64 SPIr, IKEv2_CRYPTO_SETTING* setting,
 	SA->hasEstablished = false;
 	SA->isClosed = false;
 	SA->isRekeyed = false;
+	SA->isClientBehindNAT = false;
 
 	SA->succ_request = NULL;
 	SA->succ_response = NULL;
@@ -1040,6 +1041,7 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 
 	IKEv2_NOTIFY_PAYLOAD* nat_source_i = allNtfs.NATSourceIP;
 	IKEv2_NOTIFY_PAYLOAD* nat_dest_i = allNtfs.NATDestIP;
+	bool isClientNAT = false;
 
 	if (nat_source_i != NULL && nat_dest_i != NULL) {
 		BUF* bsi = nat_source_i->message;
@@ -1048,6 +1050,7 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		DbgBuf("NAT_SOURCE_IP_I: ", bsi);
 		DbgBuf("NAT_DESTINATION_IP_I: ", bdi);
 
+		bool natted = true;
 		BUF* bSrc = NewBuf();
 		WriteBufInt64(bSrc, SPIi);
 		WriteBufInt64(bSrc, (UINT64)0);
@@ -1057,6 +1060,9 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		void* dest = ZeroMalloc(20);
 		Sha1(dest, bSrc->Buf, bSrc->Size);
 		DbgPointer("CALCED_NAT_SOURCE_IP", dest, 20);
+		if (Cmp(dest, bsi->Buf, bsi->Size) != 0) {
+			natted = false;
+		}
 
 		BUF* bDest = NewBuf();
 		WriteBufInt64(bDest, SPIi);
@@ -1066,6 +1072,14 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 
 		Sha1(dest, bDest->Buf, bDest->Size);
 		DbgPointer("CALCED_NAT_DESTINATION_IP", dest, 20);
+		if ((natted == true) && Cmp(dest, bdi->Buf, bdi->Size) != 0) {
+			natted = false;
+		}
+
+		isClientNAT = natted;
+		if (isClientNAT) {
+			Dbg("NAT behind client detected");
+		}
 	}
 
 	UCHAR* shared_key = ZeroMalloc(sizeof(UCHAR) * setting->dh->size); // g ^ ir
@@ -1091,6 +1105,7 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		IKEv2_SA* newSA = Ikev2CreateSA(SPIi, SPIr, setting, key_data);
 		newSA->client = client;
 		newSA->hasEstablished = false;
+		newSA->isClientBehindNAT = isClientNAT;
 		newSA->nonce_i = CloneBuf(nonce_i->nonce);
 		newSA->nonce_r = CloneBuf(nonce_r);
 		newSA->succ_request = CloneBuf(packet->ByteMsg);
@@ -1116,6 +1131,10 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		}
 
 		IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_SA_INIT, true, false, false, packet->MessageId, send_list);
+		if (newSA->isClientBehindNAT == true) {
+			Dbg("Sending packet through NAT");
+			client->client_port = IPSEC_PORT_IPSEC_ESP_UDP;
+		}
 		Ikev2SendPacket(ike, client, to_send, NULL);
 		newSA->succ_response = CloneBuf(to_send->ByteMsg);
 
@@ -1621,7 +1640,12 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 			
 			LIST* sk_list = NewListSingle(sk);
 			IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_AUTH, true, false, false, packet->MessageId, sk_list);
-			Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, param);
+			UINT port = p->SrcPort;
+			if (SA->isClientBehindNAT == true) {
+				Dbg("Sending packet through NAT");
+				port = IPSEC_PORT_IPSEC_ESP_UDP;
+			}
+			Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, port, to_send, param);
 			
 			Ikev2FreePacket(to_send);
 			
@@ -1783,7 +1807,12 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 			LIST* sk_list = NewListSingle(sk);
 
 			IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_CREATE_CHILD_SA, true, false, false, packet->MessageId, sk_list);
-			Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, ikeSA->param);
+			UINT port = p->SrcPort;
+			if (ikeSA->isClientBehindNAT == true) {
+				Dbg("Sending packet through NAT");
+				port = IPSEC_PORT_IPSEC_ESP_UDP;
+			}
+			Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, port, to_send, ikeSA->param);
 
 			UINT newSPI = ReadBufInt((((IKEv2_SA_PROPOSAL*)(LIST_DATA(SAr->proposals, 0)))->SPI));
 			Dbg("New SPI == %u", newSPI);
@@ -3549,7 +3578,12 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 	LIST* sk_list = NewListSingle(sk);
 
 	IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, SPIr, IKEv2_INFORMATIONAL, true, false, false, packet->MessageId, sk_list);
-	Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, np, param);
+	UINT port = p->SrcPort;
+	if (SA->isClientBehindNAT == true) {
+		Dbg("Sending packet through NAT");
+		port = IPSEC_PORT_IPSEC_ESP_UDP;
+	}
+	Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, port, np, param);
 
 	Dbg("INFORMATIONAL: Freeing informational exchange");
 	Ikev2FreePacket(np);
