@@ -539,7 +539,7 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 	for (i = 0; i < LIST_NUM(ikev2->SendPacketList); ++i)
 	{
 		UDPPACKET *p = LIST_DATA(ikev2->SendPacketList, i);
-		Debug("Got packet with type %u, port %u to send, sending", p->Type, p->SrcPort);
+		Debug("Got packet with type %u, port %u %u to send, sending", p->Type, p->SrcPort, p->DestPort);
 		if (p->Type == IKE_UDP_TYPE_ISAKMP && p->SrcPort == IPSEC_PORT_IPSEC_ESP_UDP)
 		{
 			Debug("Encapsulating IKE packet");

@@ -1644,9 +1644,9 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 			UINT port = p->SrcPort;
 			if (SA->isClientBehindNAT == true) {
 				Dbg("Sending packet through NAT");
-				port = IPSEC_PORT_IPSEC_ESP_UDP;
+				//port = IPSEC_PORT_IPSEC_ESP_UDP;
 			}
-			Ikev2SendPacketByAddress(ike, &p->DstIP, port, &p->SrcIP, port, to_send, param);
+			Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, port, to_send, param);
 			
 			Ikev2FreePacket(to_send);
 			
