@@ -1132,8 +1132,9 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 
 		IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_SA_INIT, true, false, false, packet->MessageId, send_list);
 		if (newSA->isClientBehindNAT == true) {
+			Dbg("Sending packet through NAT");
+			client->server_port = IPSEC_PORT_IPSEC_ESP_UDP;
 			client->client_port = IPSEC_PORT_IPSEC_ESP_UDP;
-			Dbg("Sending packet through NAT %u", client->client_port);
 		}
 		Ikev2SendPacket(ike, client, to_send, NULL);
 		newSA->succ_response = CloneBuf(to_send->ByteMsg);
@@ -1645,7 +1646,7 @@ void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET
 				Dbg("Sending packet through NAT");
 				port = IPSEC_PORT_IPSEC_ESP_UDP;
 			}
-			Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, port, to_send, param);
+			Ikev2SendPacketByAddress(ike, &p->DstIP, port, &p->SrcIP, port, to_send, param);
 			
 			Ikev2FreePacket(to_send);
 			
