@@ -1131,10 +1131,10 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		}
 
 		IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_SA_INIT, true, false, false, packet->MessageId, send_list);
+		client->server_port = IPSEC_PORT_IPSEC_ISAKMP;
 		if (newSA->isClientBehindNAT == true) {
 			Dbg("Sending packet through NAT");
-			//client->server_port = IPSEC_PORT_IPSEC_ESP_UDP;
-			//client->client_port = IPSEC_PORT_IPSEC_ESP_UDP;
+			client->server_port = IPSEC_PORT_IPSEC_ESP_UDP;
 		}
 		Ikev2SendPacket(ike, client, to_send, NULL);
 		newSA->succ_response = CloneBuf(to_send->ByteMsg);
@@ -1808,12 +1808,12 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 			LIST* sk_list = NewListSingle(sk);
 
 			IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_CREATE_CHILD_SA, true, false, false, packet->MessageId, sk_list);
-			UINT port = p->SrcPort;
+			UINT port = IPSEC_PORT_IPSEC_ISAKMP;
 			if (ikeSA->isClientBehindNAT == true) {
 				Dbg("Sending packet through NAT");
 				port = IPSEC_PORT_IPSEC_ESP_UDP;
 			}
-			Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, port, to_send, ikeSA->param);
+			Ikev2SendPacketByAddress(ike, &p->DstIP, port, &p->SrcIP, p->SrcPort, to_send, ikeSA->param);
 
 			UINT newSPI = ReadBufInt((((IKEv2_SA_PROPOSAL*)(LIST_DATA(SAr->proposals, 0)))->SPI));
 			Dbg("New SPI == %u", newSPI);
@@ -1937,7 +1937,12 @@ void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, 
 					LIST* sk_list = NewListSingle(sk);
 
 					IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_CREATE_CHILD_SA, true, false, false, packet->MessageId, sk_list);
-					Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, p->SrcPort, to_send, ikeSA->param);
+					UINT port = IPSEC_PORT_IPSEC_ISAKMP;
+					if (ikeSA->isClientBehindNAT == true) {
+						Dbg("Sending packet through NAT");
+						port = IPSEC_PORT_IPSEC_ESP_UDP;
+					}
+					Ikev2SendPacketByAddress(ike, &p->DstIP, port, &p->SrcIP, p->SrcPort, to_send, ikeSA->param);
 
 					ikeSA->isClosed = true;
 					ikeSA->isRekeyed = true;
@@ -3579,12 +3584,12 @@ void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, U
 	LIST* sk_list = NewListSingle(sk);
 
 	IKEv2_PACKET* np = Ikev2CreatePacket(SPIi, SPIr, IKEv2_INFORMATIONAL, true, false, false, packet->MessageId, sk_list);
-	UINT port = p->SrcPort;
+	UINT port = IPSEC_PORT_IPSEC_ISAKMP;
 	if (SA->isClientBehindNAT == true) {
 		Dbg("Sending packet through NAT");
 		port = IPSEC_PORT_IPSEC_ESP_UDP;
 	}
-	Ikev2SendPacketByAddress(ike, &p->DstIP, p->DestPort, &p->SrcIP, port, np, param);
+	Ikev2SendPacketByAddress(ike, &p->DstIP, port, &p->SrcIP, p->SrcPort, np, param);
 
 	Dbg("INFORMATIONAL: Freeing informational exchange");
 	Ikev2FreePacket(np);
