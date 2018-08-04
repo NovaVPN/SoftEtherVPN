@@ -1131,11 +1131,7 @@ void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACK
 		}
 
 		IKEv2_PACKET* to_send = Ikev2CreatePacket(SPIi, SPIr, IKEv2_SA_INIT, true, false, false, packet->MessageId, send_list);
-		client->server_port = IPSEC_PORT_IPSEC_ISAKMP;
-		if (newSA->isClientBehindNAT == true) {
-			Dbg("Sending packet through NAT");
-			client->server_port = IPSEC_PORT_IPSEC_ESP_UDP;
-		}
+		client->server_port = IPSEC_PORT_IPSEC_ISAKMP; // costil
 		Ikev2SendPacket(ike, client, to_send, NULL);
 		newSA->succ_response = CloneBuf(to_send->ByteMsg);
 
