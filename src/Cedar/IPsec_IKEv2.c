@@ -619,7 +619,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 								{
 									Dbg("Flags are ok");
 									if (pkt->L3.IPv4Header->Protocol == 17) {
-										Ikev2ProcIPsecUdpPacketRecv(ike, c, dec_data, dec_size);
+										Ikev2ProcIPsecUdpPacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize);
 									} else 
 
 									if (pkt->L3.IPv4Header->Protocol == IPSEC_IP_PROTO_ETHERIP)
