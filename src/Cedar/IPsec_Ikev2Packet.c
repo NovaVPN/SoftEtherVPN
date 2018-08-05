@@ -766,6 +766,7 @@ BUF* ikev2_configuration_encode(IKEv2_CP_PAYLOAD *p) {
 		BUF *tmp = NewBuf();
 		
 		WriteBufShort(tmp, a->type);
+		Dbg("CP type: %u %u", Endian16(a->type), Endian16(a->type) >> 1);
 		WriteBufShort(tmp, a->length);
 
 		if (a->value != NULL) {
