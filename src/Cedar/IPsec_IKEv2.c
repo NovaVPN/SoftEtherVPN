@@ -842,6 +842,8 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 		// For now reply only some IPv4 queries && application version
 		IKEv2_CP_ATTR* attr = ((IKEv2_CP_ATTR*)LIST_DATA(req->attributes, i));
 		
+		bool ok = false;
+
 		IKEv2_CP_ATTR* add = Malloc(sizeof(IKEv2_CP_ATTR));
 		add->type = attr->type;
 		add->length = 0;
@@ -851,10 +853,12 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 		case IKEv2_INTERNAL_IP4_ADDRESS:
 			if (attr->length > 0) {
 				Dbg("Using asked IP address");
+				ok = true;
 				add->length = attr->length;
 				add->value = CloneBuf(attr->value);
 				break;
 			}
+			ok = true;
 			add->length = 4;
 			//CEDAR* cedar = ike->ike_server->Cedar;
 			IP ip;
@@ -870,6 +874,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			}*/
 			break;
 		case IKEv2_INTERNAL_IP4_NETMASK:
+			ok = true;
 			add->length = 4;
 			IP mask;
 			SetIP(&mask, 255, 255, 255, 0);
@@ -877,6 +882,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			DbgBuf("VALUE: ", add->value);
 			break;
 		case IKEv2_INTERNAL_IP4_DNS:
+			ok = true;
 			add->length = 4;
 			IP dns;
 			SetIP(&dns, 8, 8, 8, 8);
@@ -884,12 +890,14 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			break;
 		case IKEv2_INTERNAL_IP4_NBNS:
 			Dbg("Asking for NetBios Name Server, skipping");
+			ok = true;
 			if (attr->length > 0) {
 				add->length = attr->length;
 				add->value = CloneBuf(attr->value);
 			}
 			break;
 		case IKEv2_APPLICATION_VERSION: {
+			ok = true;
 			char text[] = "SoftEther IKEv2";
 			add->length = strlen(text);
 			add->value = NewBufFromMemory(text, add->length);
@@ -907,6 +915,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			break;*/
 		case IKEv2_INTERNAL_IP4_DHCP:
 		default:
+			ok = false;
 			add->length = attr->length;
 			if (attr->value != NULL) {
 				add->value = CloneBuf(attr->value);
@@ -915,9 +924,25 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			break;
 		}
 
-		Add(ret->attributes, add);
+		if (ok == true) {
+			Add(ret->attributes, add);
+		}
+		else {
+			if (add->value != NULL) {
+				FreeBuf(add->value);
+			}
+			Free(add);
+		}
 	}
 	
+	IKEv2_CP_ATTR* adda = Malloc(sizeof(IKEv2_CP_ATTR));
+	adda->type = IKEv2_INTERNAL_IP4_DNS;
+	adda->length = 4;
+	IP dns;
+	SetIP(&dns, 8, 8, 4, 4);
+	adda->value = NewBufFromMemory(dns.addr, 4);
+	Add(ret->attributes, adda);
+
 	return reply;
 }
 
