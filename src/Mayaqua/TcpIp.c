@@ -3220,7 +3220,7 @@ bool ParseUDP(PKT *p, UCHAR *buf, UINT size)
 		if (p->PayloadSize >= sizeof(IKE_HEADER))
 		{
 			IKE_HEADER *ike_header = (IKE_HEADER *)p->Payload;
-
+			Dbg("TCP: parsing IKE packet");
 			if (ike_header->InitiatorCookie != 0 && ike_header->ResponderCookie == 0 &&
 				(ike_header->ExchangeType == IKE_EXCHANGE_TYPE_MAIN ||
 				ike_header->ExchangeType == IKE_EXCHANGE_TYPE_AGGRESSIVE))
