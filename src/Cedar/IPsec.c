@@ -918,7 +918,9 @@ IPSEC_SERVER *NewIPsecServer(CEDAR *cedar)
 
 	StrCpy(s->Ike->Secret, sizeof(s->Ike->Secret), IPSEC_DEFAULT_SECRET);
 	StrCpy(s->Ikev2->ike_server->Secret, sizeof(s->Ikev2->ike_server->Secret), IPSEC_DEFAULT_SECRET);
-
+	char* sf = ZeroMalloc(65);
+	IPToStr(sf, 64, &cedar->Server->ListenIP);
+	Dbg("ListenIP: %s", sf);
 	s->UdpListener = NewUdpListener(IPsecServerUdpPacketRecvProc, s, &cedar->Server->ListenIP);
 
 	s->EtherIPIdList = NewList(CmpEtherIPId);
