@@ -3124,6 +3124,7 @@ bool ParseDnsQuery(char *name, UINT name_size, void *data, UINT data_size)
 // DNS parsing
 void ParseDNS(PKT *p, UCHAR *buf, UINT size)
 {
+	Debug("Parsing DNS packet\n");
 	UCHAR *query_data;
 	UINT query_data_size;
 	DNSV4_HEADER *dns;
