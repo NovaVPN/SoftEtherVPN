@@ -3163,6 +3163,7 @@ void ParseDNS(PKT *p, UCHAR *buf, UINT size)
 	}
 
 	StrCpy(p->DnsQueryHost, sizeof(p->DnsQueryHost), hostname);
+	Debug("DNS HOST: %s", p->DnsQueryHost, sizeof(p->DnsQueryHost));
 	p->TypeL7 = L7_DNS;
 }
 
