@@ -936,13 +936,13 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 		}
 	}
 	
-	IKEv2_CP_ATTR* adda = Malloc(sizeof(IKEv2_CP_ATTR));
+	/*IKEv2_CP_ATTR* adda = Malloc(sizeof(IKEv2_CP_ATTR));
 	adda->type = IKEv2_INTERNAL_IP4_DNS;
 	adda->length = 4;
 	IP dns;
 	SetIP(&dns, 8, 8, 4, 4);
 	adda->value = NewBufFromMemory(dns.addr, 4);
-	Add(ret->attributes, adda);
+	Add(ret->attributes, adda);*/
 
 	return reply;
 }
