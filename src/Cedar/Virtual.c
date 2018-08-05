@@ -7560,6 +7560,7 @@ void IpReceived(VH *v, UINT src_ip, UINT dest_ip, UINT protocol, void *data, UIN
 		return;
 	}
 
+	Debug("IP received");
 	// Deliver the data to the supported high-level protocol
 	switch (protocol)
 	{
@@ -7949,6 +7950,7 @@ void VirtualIpReceived(VH *v, PKT *packet)
 		return;
 	}
 
+	Debug("Virtual IP received");
 	if (IPV4_GET_OFFSET(ip) == 0 && (IPV4_GET_FLAGS(ip) & 0x01) == 0)
 	{
 		// Because this packet has not been fragmented, it can be delivered to the upper layer immediately
