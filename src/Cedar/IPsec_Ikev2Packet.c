@@ -604,7 +604,7 @@ BUF* ikev2_TS_encode(IKEv2_TS_PAYLOAD *p) {
 	//reserved 3 bytes
 	WriteBufShort(b, 0);
 	WriteBufChar(b, 0);
-
+	Dbg("Encoding");
 	for (UINT i = 0; i < p->TS_count; ++i) {
 		IKEv2_TRAFFIC_SELECTOR* selector = (IKEv2_TRAFFIC_SELECTOR*)LIST_DATA(p->selectors, i);
 
@@ -619,6 +619,12 @@ BUF* ikev2_TS_encode(IKEv2_TS_PAYLOAD *p) {
 		if (selector->end_address->Size > 0) {
 			WriteBufBuf(b, selector->end_address);
 		}
+
+		Dbg("TS selector: %u.%u.%u.%u:%u -> %u.%u.%u.%u:%u",
+			((UCHAR*)(selector->start_address->Buf))[0], ((UCHAR*)(selector->start_address->Buf))[1],
+			((UCHAR*)(selector->start_address->Buf))[2], ((UCHAR*)(selector->start_address->Buf))[3], selector->start_port,
+			((UCHAR*)(selector->end_address->Buf))[0], ((UCHAR*)(selector->end_address->Buf))[1],
+			((UCHAR*)(selector->end_address->Buf))[2], ((UCHAR*)(selector->end_address->Buf))[3], selector->end_port);
 	}
 
 	return b;
