@@ -856,16 +856,18 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 				break;
 			}
 			add->length = 4;
-			CEDAR* cedar = ike->ike_server->Cedar;
+			//CEDAR* cedar = ike->ike_server->Cedar;
 			IP ip;
-			bool res = StrToIP(&ip, cedar->Server->DDnsClient->CurrentIPv4);
+			SetIP(&ip, 10, 10, 10, 10);
+			add->value = NewBufFromMemory(ip.addr, 4);
+			/*bool res = StrToIP(&ip, cedar->Server->DDnsClient->CurrentIPv4);
 			if (res == true) {
 				Dbg("OK");
 				UCHAR* ipstr = ZeroMalloc(64);
 				IPToStr(ipstr, 64, &ip);
 				Dbg("IP got: %s", ipstr);
 				add->value = NewBufFromMemory(ip.addr, 4);
-			}
+			}*/
 			break;
 		case IKEv2_INTERNAL_IP4_NETMASK:
 			add->length = 4;
@@ -875,10 +877,10 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			DbgBuf("VALUE: ", add->value);
 			break;
 		case IKEv2_INTERNAL_IP4_DNS:
-			/*add->length = 4;
+			add->length = 4;
 			IP dns;
 			SetIP(&dns, 8, 8, 8, 8);
-			add->value = NewBufFromMemory(dns.addr, 4);*/
+			add->value = NewBufFromMemory(dns.addr, 4);
 			break;
 		case IKEv2_INTERNAL_IP4_NBNS:
 			Dbg("Asking for NetBios Name Server, skipping");
@@ -893,7 +895,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			add->value = NewBufFromMemory(text, add->length);
 		}
 		case IKEv2_INTERNAL_IP4_SUBNET:
-			add->length = 8;
+			/*add->length = 8;
 			IP sip, mip;
 			SetIP(&sip, 10, 10, 10, 10);
 			SetIP(&mip, 255, 255, 255, 0);
@@ -902,7 +904,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			Copy(r + 4, mip.addr, 4);
 			add->value = NewBufFromMemory(r, 8);
 			Free(r);
-			break;
+			break;*/
 		case IKEv2_INTERNAL_IP4_DHCP:
 		default:
 			add->length = attr->length;
