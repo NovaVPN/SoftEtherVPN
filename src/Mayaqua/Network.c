@@ -20295,7 +20295,7 @@ LABEL_FATAL_ERROR:
 						// Receive a regular packet
 						p = NewUdpPacket(&src_addr, src_port, &us->Sock->LocalIP, us->Sock->LocalPort,
 							Clone(buf, size), size);
-
+						Debug("New UDP PACKET: %u -> %u", src_port, p->DestPort);
 						if (p->SrcPort == MAKE_SPECIAL_PORT(52))
 						{
 							p->SrcPort = p->DestPort = MAKE_SPECIAL_PORT(50);

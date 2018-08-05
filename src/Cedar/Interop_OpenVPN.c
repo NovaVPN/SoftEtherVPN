@@ -2654,6 +2654,7 @@ void FreeOpenVpnServer(OPENVPN_SERVER *s)
 // UDP reception procedure
 void OpenVpnServerUdpListenerProc(UDPLISTENER *u, LIST *packet_list)
 {
+	Debug("OPENVPN udp packet received");
 	OPENVPN_SERVER_UDP *us;
 	UINT64 now = Tick64();
 	// Validate arguments
