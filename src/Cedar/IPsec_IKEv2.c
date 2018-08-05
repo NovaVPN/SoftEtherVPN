@@ -886,6 +886,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 			IP dns;
 			SetIP(&dns, 8, 8, 8, 8);
 			add->value = NewBufFromMemory(dns.addr, 4);
+			ok = true;
 			break;
 		case IKEv2_INTERNAL_IP4_NBNS:
 			Dbg("Asking for NetBios Name Server, skipping");
