@@ -6055,7 +6055,7 @@ void ProcIPsecEspPacketRecvShort(IKE_SERVER* ike, UDPPACKET* p, UINT spi, IPSECS
 	Copy(&cp.Iv, iv, block_size);
 
 	dec = IkeDecrypt(encrypted_payload_data, size_of_payload_data, &cp);
-	Debug("Decrypted IKE ESP packet\n");
+	Debug(" Decrypted IKE ESP packet\n");
 	if (dec != NULL)
 	{
 		UCHAR *dec_data = dec->Buf;
