@@ -610,7 +610,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 							UCHAR* srcstr = ZeroMalloc(65);
 							IPToStr(dststr, 64, &dst);
 							IPToStr(srcstr, 64, &src);
-							Dbg("Source: %s, destination: %s", dststr, srcstr);
+							Dbg("Source: %s, destination: %s", srcstr, dststr);
 							Dbg("Proto = %u", pkt->L3.IPv4Header->Protocol);
 							if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) == 0)
 							{
@@ -4210,3 +4210,4 @@ IKEv2_IPSECSA* Ikev2FindIPSECSA(IKEv2_SERVER* ike, UINT SPI) {
 
 	return NULL;
 }
+
