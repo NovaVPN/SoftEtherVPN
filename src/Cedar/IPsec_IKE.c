@@ -950,7 +950,7 @@ void ProcIPsecUdpPacketRecv(IKE_SERVER *ike, IKE_CLIENT *c, UCHAR *data, UINT da
 
 	src_port = Endian16(u->SrcPort);
 	dst_port = Endian16(u->DstPort);
-
+	Debug("Src_port %u, Dest port %u\n", src_port, dst_port);
 	if (dst_port == IPSEC_PORT_L2TP)
 	{
 		UDPPACKET p;
