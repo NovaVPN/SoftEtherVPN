@@ -6055,9 +6055,10 @@ void ProcIPsecEspPacketRecvShort(IKE_SERVER* ike, UDPPACKET* p, UINT spi, IPSECS
 	Copy(&cp.Iv, iv, block_size);
 
 	dec = IkeDecrypt(encrypted_payload_data, size_of_payload_data, &cp);
-	Debug(" Decrypted IKE ESP packet\n");
+	Debug("Decrypted IKE ESP packet\n");
 	if (dec != NULL)
 	{
+		Debug("Dec != NULL\n");
 		UCHAR *dec_data = dec->Buf;
 		UINT dec_size = dec->Size;
 		UCHAR size_of_padding = dec_data[dec_size - 2];
@@ -6177,6 +6178,7 @@ void ProcIPsecEspPacketRecvShort(IKE_SERVER* ike, UDPPACKET* p, UINT spi, IPSECS
 			}
 			else
 			{
+				Debug("Transport mode %u\n", next_header);
 				// Transport mode
 				if (next_header == IP_PROTO_UDP)
 				{
