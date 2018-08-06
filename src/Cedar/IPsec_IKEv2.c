@@ -2901,8 +2901,8 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 		return NULL;
 	}
 
-	IKEv2_SA_PAYLOAD* ret_sa = ((IKEv2_SA_PAYLOAD*)ret->data);
-	ret_sa->proposals = NewList(NULL);
+	IKEv2_SA_PAYLOAD* ret_sa = ret->data;
+	//ret_sa->proposals = NewList(NULL);
 	LIST** ret_props = &(ret_sa->proposals);
 	
 	UINT prop_count = LIST_NUM(sa->proposals);
@@ -2964,22 +2964,28 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 				break;
 			}
 			default:
-				Dbg("Not yet supported proposal protocol: %d\n", protocol);
+				Dbg("Not yet supported proposal protocol: %u\n", protocol);
 				break;
 			}
 
 			if (mandatory) {
-				*ret_props = NewList(NULL);
-
-				IKEv2_SA_PROPOSAL* prop = ZeroMalloc(sizeof(IKEv2_SA_PROPOSAL));
-				if (prop == NULL) {
+				IKEv2_SA_PROPOSAL* cur_prop = ZeroMalloc(sizeof(IKEv2_SA_PROPOSAL));
+				if (cur_prop == NULL) {
 					Dbg("Failed to allocate mem IKEv2_SA_PROPOSAL on iter %u", i);
+					Ikev2FreePayload(ret);
+					
+					ReleaseList(encr);
+					ReleaseList(prf);
+					ReleaseList(integ);
+					ReleaseList(dh);
+					ReleaseList(esn);
+
 					return NULL;
 				}
 
-				Add(*ret_props, prop);
-				IKEv2_SA_PROPOSAL* cur_prop = (IKEv2_SA_PROPOSAL*)LIST_DATA(*ret_props, 0);
-
+				*ret_props = NewList(NULL);
+				Add(*ret_props, cur_prop);
+				
 				cur_prop->is_last = proposal->is_last;
 				cur_prop->length = 0;
 				cur_prop->number = proposal->number;
@@ -2995,6 +3001,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 					cur_prop->transform_number = 0;
 					break;
 				case IKEv2_PROPOSAL_PROTOCOL_ESP:
+					cur_prop->transform_number = 2;
 					break;
 				default:
 					cur_prop->transform_number = 0;
@@ -3007,8 +3014,9 @@ IKEv2_PACKET_PAYLOAD* Ikev2ChooseBestIKESA(IKEv2_SERVER* ike, IKEv2_SA_PAYLOAD* 
 					IKEv2_SA_TRANSFORM* encr_transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(encr, Rand32() % LIST_NUM(encr));
 					IKEv2_SA_TRANSFORM* prf_transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(prf, Rand32() % LIST_NUM(prf));
 					IKEv2_SA_TRANSFORM* integ_transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(integ, Rand32() % LIST_NUM(integ));
-					IKEv2_SA_TRANSFORM* dh_transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(dh, 0);
+					
 					UINT dh_count = LIST_NUM(dh);
+					IKEv2_SA_TRANSFORM* dh_transform = (IKEv2_SA_TRANSFORM*)LIST_DATA(dh, 0);
 					for (UINT j = 1; j < dh_count; ++j) {
 						IKEv2_SA_TRANSFORM* curDH = (IKEv2_SA_TRANSFORM*)LIST_DATA(dh, j);
 						if (curDH->transform.ID > dh_transform->transform.ID) {

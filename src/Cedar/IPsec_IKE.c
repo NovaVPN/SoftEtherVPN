@@ -6055,6 +6055,7 @@ void ProcIPsecEspPacketRecvShort(IKE_SERVER* ike, UDPPACKET* p, UINT spi, IPSECS
 	Copy(&cp.Iv, iv, block_size);
 
 	dec = IkeDecrypt(encrypted_payload_data, size_of_payload_data, &cp);
+	Debug("Decrypted IKE ESP packet\n");
 	if (dec != NULL)
 	{
 		UCHAR *dec_data = dec->Buf;
@@ -6069,6 +6070,7 @@ void ProcIPsecEspPacketRecvShort(IKE_SERVER* ike, UDPPACKET* p, UINT spi, IPSECS
 
 			if (is_tunnel_mode)
 			{
+				Debug("NEXT_HEADER == %u\n", next_header);
 				// Tunnel Mode
 				if (next_header == IKE_PROTOCOL_ID_IPV4 || next_header == IKE_PROTOCOL_ID_IPV6)
 				{
@@ -6100,6 +6102,7 @@ void ProcIPsecEspPacketRecvShort(IKE_SERVER* ike, UDPPACKET* p, UINT spi, IPSECS
 					}
 					else
 					{
+						Debug("L3 Type %u %u\n", pkt->TypeL3, pkt->L3.IPv4Header->Protocol);
 						// Parsing success
 						switch (pkt->TypeL3)
 						{
