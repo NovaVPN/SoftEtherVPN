@@ -700,7 +700,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 					//if (ike->IPsec->Services.L2TP_IPsec || ike->IPsec->Services.EtherIP_IPsec)
 					{
 						// An UDP packet has been received
-						Ikev2ProcIPsecUdpPacketRecv(ike, c, dec_data, dec_size);
+						//Ikev2ProcIPsecUdpPacketRecv(ike, c, dec_data, dec_size);
 					}
 				}
 				else if (next_header == IPSEC_IP_PROTO_ETHERIP)
