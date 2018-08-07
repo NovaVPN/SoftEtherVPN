@@ -5,7 +5,7 @@
 #include "IPsec_Ikev2Packet.h"
 
 // An UDP packet has been received via the IPsec tunnel
-void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, UCHAR *data, UINT data_size)
+void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, UCHAR *data, UINT data_size)
 {
 	UDP_HEADER *u;
 	UINT payload_size;
@@ -71,6 +71,12 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, UCHAR *data
 #ifdef	RAW_DEBUG
 		IPsecIkeSendUdpForDebug(IPSEC_PORT_L2TP, 1, p.Data, p.Size);
 #endif	// RAW_DEBUG
+	}
+	else {
+		void* content = Malloc(payload_size);
+		Copy(content, data + sizeof(UDP_HEADER), payload_size);
+		UDPPACKET* p = NewUdpPacket(&pkt->L3.IPv4Header->SrcIP, dst_port, &pkt->L3.IPv4Header->DstIP, dst_port, content, payload_size);
+		Add(ike->SendPacketList, p);
 	}
 }
 
@@ -619,7 +625,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 								{
 									Dbg("Flags are ok");
 									if (pkt->L3.IPv4Header->Protocol == 17) {
-										Ikev2ProcIPsecUdpPacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize);
+										Ikev2ProcIPsecUdpPacketRecv(ike, c, pkt, pkt->IPv4PayloadData, pkt->IPv4PayloadSize);
 									} else 
 
 									if (pkt->L3.IPv4Header->Protocol == IPSEC_IP_PROTO_ETHERIP)
