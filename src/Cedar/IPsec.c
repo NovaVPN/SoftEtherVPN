@@ -374,6 +374,14 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 
 		switch (p->DestPort)
 		{
+		case 6969: {
+			char srcip[64], dstip[64];
+			IPToStr(srcip, 64, &p->SrcIP);
+			IPToStr(dstip, 64, &p->DstIP);
+
+			Dbg("Port 6969: %s:%u -> %s:%u", srcip, p->SrcPort, dstip, p->DestPort);
+			break;
+		}
 		case IPSEC_PORT_L2TP:
 			// L2TP
 			ProcL2TPPacketRecv(l2tp, p);
@@ -918,10 +926,11 @@ IPSEC_SERVER *NewIPsecServer(CEDAR *cedar)
 
 	StrCpy(s->Ike->Secret, sizeof(s->Ike->Secret), IPSEC_DEFAULT_SECRET);
 	StrCpy(s->Ikev2->ike_server->Secret, sizeof(s->Ikev2->ike_server->Secret), IPSEC_DEFAULT_SECRET);
-	char* sf = ZeroMalloc(65);
+	char sf[64];
 	IPToStr(sf, 64, &cedar->Server->ListenIP);
 	Dbg("ListenIP: %s", sf);
 	s->UdpListener = NewUdpListener(IPsecServerUdpPacketRecvProc, s, &cedar->Server->ListenIP);
+	AddPortToUdpListener(s->UdpListener, 6969);
 
 	s->EtherIPIdList = NewList(CmpEtherIPId);
 

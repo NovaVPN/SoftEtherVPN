@@ -75,7 +75,7 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, U
 	else {
 		void* content = Malloc(payload_size);
 		Copy(content, data + sizeof(UDP_HEADER), payload_size);
-		UDPPACKET* p = NewUdpPacket(&pkt->L3.IPv4Header->SrcIP, 500, &pkt->L3.IPv4Header->DstIP, dst_port, content, payload_size);
+		UDPPACKET* p = NewUdpPacket(&pkt->L3.IPv4Header->SrcIP, 6969, &pkt->L3.IPv4Header->DstIP, dst_port, content, payload_size);
 		Add(ike->SendPacketList, p);
 	}
 }
