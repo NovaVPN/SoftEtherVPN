@@ -380,18 +380,9 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 			IPToStr(dstip, 64, &p->DstIP);
 
 			Dbg("Port 6969: %s:%u -> %s:%u", srcip, p->SrcPort, dstip, p->DestPort);
+			IKEv2_IPSECSA* sa = LIST_DATA(ikev2->ipsec_SAs, 0);
+			Ikev2IPsecSendUdpPacket(ikev2, sa, sa->client->server_port, sa->client->client_port, p->Data, p->Size);
 			
-			PKT* pkt = ParsePacket(p->Data, p->Size);
-			if (pkt == NULL) {
-				Dbg("Packet parse false");
-			}
-			else {
-				IP r;
-				UINTToIP(&r, pkt->L3.IPv4Header->DstIP);
-				char sr[64];
-				IPToStr(sr, 64, &r);
-				Dbg("PACKET IP = %s", sr);
-			}
 			break;
 		}
 		case IPSEC_PORT_L2TP:

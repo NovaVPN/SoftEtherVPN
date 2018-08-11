@@ -235,7 +235,7 @@ IKEv2_CLIENT* NewIkev2Client(IP* clientIP, UINT clientPort, IP* serverIP, UINT s
 		return NULL;
 	}
 
-	IKEv2_CLIENT* client = (IKEv2_CLIENT*)ZeroMalloc(sizeof(IKEv2_CLIENT));
+	IKEv2_CLIENT* client = ZeroMalloc(sizeof(IKEv2_CLIENT));
 	
 	CopyIP(&client->client_ip, clientIP);
 	client->client_port = clientPort;
@@ -291,10 +291,12 @@ IKEv2_IPSECSA* Ikev2CreateIPsecSA(UINT SPI, IKEv2_SA* parent_IKESA, IKEv2_CRYPTO
 	IKEv2_IPSECSA* ret = ZeroMalloc(sizeof(IKEv2_IPSECSA));
 	ret->ike_sa = parent_IKESA;
 	ret->SPI = SPI;
+	ret->seqNumber = 0;
 	ret->isClosed = false;
 	ret->param = ZeroMalloc(sizeof(IKEv2_CRYPTO_PARAM));
 	ret->param->key_data = key_data;
 	ret->param->setting = setting;
+	ret->client = parent_IKESA->client;
 
 	return ret;
 }
@@ -481,7 +483,6 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	Dbg("IKEv2 ESP init");
 
 	UINT seq;
-	IKE_CLIENT *c;
 	UINT block_size;
 	UINT hash_size;
 	bool update_status = false;
@@ -489,7 +490,6 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	UCHAR *hash;
 	UCHAR *encrypted_payload_data;
 	UINT size_of_payload_data;
-	IKE_CRYPTO_PARAM cp;
 	BUF *dec;
 	bool is_tunnel_mode = true; // for now it's true
 	
@@ -503,7 +503,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	Dbg("Seq: %u", seq);
 	//is_tunnel_mode = IsIPsecSaTunnelMode(ipsec_sa);
 
-	//c = ipsec_sa->IkeClient;
+	IKEv2_CLIENT* c = ipsec_sa->client;
 
 	block_size = param->setting->encr->block_size;
 	hash_size = param->setting->integ->out_size;
@@ -609,13 +609,12 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 							//UINTToIP(&c->TunnelModeServerIP, pkt->L3.IPv4Header->DstIP);
 							//UINTToIP(&c->TunnelModeClientIP, pkt->L3.IPv4Header->SrcIP);
 
-							IP dst, src;
-							UINTToIP(&dst, pkt->L3.IPv4Header->DstIP);
-							UINTToIP(&src, pkt->L3.IPv4Header->SrcIP);
-							UCHAR* dststr = ZeroMalloc(65);
-							UCHAR* srcstr = ZeroMalloc(65);
-							IPToStr(dststr, 64, &dst);
-							IPToStr(srcstr, 64, &src);
+							UINTToIP(&c->tunnelServerIP, pkt->L3.IPv4Header->DstIP);
+							UINTToIP(&c->tunnelClientIP, pkt->L3.IPv4Header->SrcIP);
+							UCHAR dststr[64];
+							UCHAR srcstr[64];
+							IPToStr(dststr, 64, &c->tunnelServerIP);
+							IPToStr(srcstr, 64, &c->tunnelClientIP);
 							Dbg("Source: %s, destination: %s", srcstr, dststr);
 							Dbg("Proto = %u", pkt->L3.IPv4Header->Protocol);
 							if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) == 0)
@@ -655,8 +654,8 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 						case L3_IPV6:
 							Dbg("IPv6");
 							// Save the internal IP address information
-							SetIP6(&c->TunnelModeServerIP, pkt->IPv6HeaderPacketInfo.IPv6Header->DestAddress.Value);
-							SetIP6(&c->TunnelModeClientIP, pkt->IPv6HeaderPacketInfo.IPv6Header->SrcAddress.Value);
+							//SetIP6(&c->TunnelModeServerIP, pkt->IPv6HeaderPacketInfo.IPv6Header->DestAddress.Value);
+							//SetIP6(&c->TunnelModeClientIP, pkt->IPv6HeaderPacketInfo.IPv6Header->SrcAddress.Value);
 
 							if (pkt->IPv6HeaderPacketInfo.IsFragment == false)
 							{
@@ -709,7 +708,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 					//if (ike->IPsec->Services.EtherIP_IPsec)
 					{
 						// An EtherIP packet has been received
-						ProcIPsecEtherIPPacketRecv(ike, c, dec_data, dec_size, false);
+						//ProcIPsecEtherIPPacketRecv(ike, c, dec_data, dec_size, false);
 					}
 				}
 				else if (next_header == IPSEC_IP_PROTO_L2TPV3)
@@ -718,7 +717,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 					//if (ike->IPsec->Services.EtherIP_IPsec)
 					{
 						// A L2TPv3 packet has been received
-						ProcL2TPv3PacketRecv(ike, c, dec_data, dec_size, false);
+						//ProcL2TPv3PacketRecv(ike, c, dec_data, dec_size, false);
 					}
 				 }
 			}
@@ -791,6 +790,279 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	//		}
 	//	}
 	//}
+}
+
+// Send an UDP packet via IPsec
+void Ikev2IPsecSendUdpPacket(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UINT src_port, UINT dst_port, UCHAR *data, UINT data_size) {
+	UCHAR *udp;
+	UINT udp_size;
+	UDP_HEADER *u;
+	bool no_free = false;
+	// Validate arguments
+	if (ike == NULL || sa == NULL || data == NULL || data_size == 0)
+	{
+		return;
+	}
+
+	// Build an UDP packet
+	udp_size = sizeof(UDP_HEADER) + data_size;
+	udp = Malloc(udp_size);
+
+	// UDP header
+	u = (UDP_HEADER*)udp;
+	u->SrcPort = Endian16(src_port);
+	u->DstPort = Endian16(dst_port);
+	u->PacketLength = Endian16(udp_size);
+	u->Checksum = 0;
+
+	//Debug("IPsec UDP Send: %u -> %u %u\n", src_port, dst_port, data_size);
+#ifdef	RAW_DEBUG
+	IPsecIkeSendUdpForDebug(IPSEC_PORT_L2TP, 1, data, data_size);
+#endif	// RAW_DEBUG
+
+	// Payload
+	Copy(udp + sizeof(UDP_HEADER), data, data_size);
+
+	/*if (IsIP6(&c->ClientIP))
+	{
+		if (IsIPsecSaTunnelMode(c->CurrentIpSecSaSend) == false)
+		{
+			u->Checksum = CalcChecksumForIPv6((IPV6_ADDR *)c->TransportModeServerIP.ipv6_addr,
+				(IPV6_ADDR *)c->TransportModeClientIP.ipv6_addr,
+				IP_PROTO_UDP,
+				u,
+				udp_size, 0);
+		}
+		else
+		{
+			u->Checksum = CalcChecksumForIPv6((IPV6_ADDR *)c->TunnelModeServerIP.ipv6_addr,
+				(IPV6_ADDR *)c->TunnelModeClientIP.ipv6_addr,
+				IP_PROTO_UDP,
+				u,
+				udp_size, 0);
+		}
+	}*/
+
+	Ikev2SendPacketByIPsecSa(ike, sa, udp, udp_size, IP_PROTO_UDP);
+
+	if (no_free == false)
+	{
+		Free(udp);
+	}
+}
+
+// Send a packet via IPsec
+void Ikev2SendPacketByIPsecSa(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UCHAR *data, UINT data_size, UCHAR protocol_id) {
+	// Validate arguments
+	if (ike == NULL || sa == NULL || data == NULL || data_size == 0)
+	{
+		return;
+	}
+
+	if (sa->isClosed == true) {
+		Dbg("Used closed IPSECSA");
+		return;
+	}
+
+	//is_tunnel_mode = IsIPsecSaTunnelMode(sa);
+	bool is_tunnel_mode = true;
+
+	IKEv2_CLIENT* c = sa->client;
+	if (c == NULL) {
+		return;
+	}
+
+	if (is_tunnel_mode)
+	{
+		// Add an IPv4 / IPv6 header in the case of tunnel mode
+		if (IsZeroIP(&c->tunnelClientIP) == false || IsZeroIP(&c->tunnelServerIP) == false)
+		{
+			BUF *b;
+			UCHAR esp_proto_id;
+
+			b = NewBuf();
+
+			if (IsIP4(&c->tunnelClientIP))
+			{
+				// IPv4 header
+				IPV4_HEADER h;
+
+				h.VersionAndHeaderLength = 0;
+				h.TypeOfService = 0;
+				IPV4_SET_VERSION(&h, 4);
+				IPV4_SET_HEADER_LEN(&h, sizeof(IPV4_HEADER) / 4);
+				h.TotalLength = Endian16((USHORT)(data_size + sizeof(IPV4_HEADER)));
+				h.Identification = Endian16(c->tunnelIPID++);
+				h.FlagsAndFlagmentOffset[0] = h.FlagsAndFlagmentOffset[1] = 0;
+				h.TimeToLive = DEFAULT_IP_TTL;
+				h.Protocol = protocol_id;
+				h.SrcIP = IPToUINT(&c->tunnelServerIP);
+				h.DstIP = IPToUINT(&c->tunnelClientIP);
+				h.Checksum = 0;
+				h.Checksum = IpChecksum(&h, sizeof(IPV4_HEADER));
+
+				WriteBuf(b, &h, sizeof(IPV4_HEADER));
+
+				esp_proto_id = IKE_PROTOCOL_ID_IPV4;
+			}
+			else
+			{
+				// IPv6 header
+				IPV6_HEADER h;
+
+				Zero(&h, sizeof(h));
+				h.VersionAndTrafficClass1 = 0;
+				IPV6_SET_VERSION(&h, 6);
+				h.TrafficClass2AndFlowLabel1 = 0;
+				h.FlowLabel2 = h.FlowLabel3 = 0;
+				h.PayloadLength = Endian16(data_size);
+				h.NextHeader = protocol_id;
+				h.HopLimit = 64;
+				Copy(h.SrcAddress.Value, c->tunnelServerIP.ipv6_addr, 16);
+				Copy(h.DestAddress.Value, c->tunnelClientIP.ipv6_addr, 16);
+
+				WriteBuf(b, &h, sizeof(IPV6_HEADER));
+
+				esp_proto_id = IKE_PROTOCOL_ID_IPV6;
+			}
+
+			WriteBuf(b, data, data_size);
+
+			Ikev2SendPacketByIPsecSaInner(ike, sa, b->Buf, b->Size, esp_proto_id);
+
+			FreeBuf(b);
+		}
+	}
+	else
+	{
+		// Send as it is in the case of transport mode
+		Ikev2SendPacketByIPsecSaInner(ike, sa, data, data_size, protocol_id);
+	}
+}
+
+void Ikev2SendPacketByIPsecSaInner(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UCHAR *data, UINT data_size, UCHAR protocol_id) {
+	UINT esp_size;
+	UINT encrypted_payload_size;
+	UCHAR *esp;
+	UINT i;
+	UINT size_of_padding;
+	IKE_CRYPTO_PARAM cp;
+	BUF *enc;
+	IKEv2_CLIENT *c;
+	// Validate arguments
+	if (ike == NULL || sa == NULL || data == NULL || data_size == 0)
+	{
+		return;
+	}
+
+	c = sa->client;
+	if (c == NULL)
+	{
+		return;
+	}
+
+	IKEv2_CRYPTO_PARAM* param = sa->param;
+	UINT block_size = param->setting->encr->block_size;
+	UINT hash_size = param->setting->integ->out_size;
+	// Calculate the payload size after encryption
+	encrypted_payload_size = data_size + 2;
+	if ((encrypted_payload_size % block_size) != 0)
+	{
+		encrypted_payload_size = ((encrypted_payload_size / block_size) + 1) * block_size;
+	}
+	size_of_padding = encrypted_payload_size - data_size - 2;
+
+	// Calculate the size of the ESP packet
+	esp_size = sizeof(UINT) * 2 + block_size + encrypted_payload_size + hash_size;
+
+	// Build the ESP packet
+	esp = Malloc(esp_size + hash_size);
+
+	// SPI
+	WRITE_UINT(esp, sa->SPI);
+
+	// Sequence number
+	WRITE_UINT(esp + sizeof(UINT), ++sa->seqNumber);
+
+	// Payload data
+	Copy(esp + sizeof(UINT) * 2 + block_size, data, data_size);
+
+	// Padding
+	for (i = 0; i < size_of_padding; i++)
+	{
+		esp[sizeof(UINT) * 2 + block_size + data_size + i] = (UCHAR)(i + 1);
+	}
+
+	// Padding length
+	esp[sizeof(UINT) * 2 + block_size + data_size + size_of_padding] = (UCHAR)size_of_padding;
+
+	// Next header number
+	esp[sizeof(UINT) * 2 + block_size + data_size + size_of_padding + 1] = protocol_id;
+
+	void* IV = Ikev2CreateIV(block_size);
+	Copy(esp + sizeof(UINT) * 2, IV, block_size);
+	param->key_data->IV = IV;
+	enc = Ikev2Encrypt(esp + sizeof(UINT) * 2 + block_size, encrypted_payload_size, param);
+	param->key_data->IV = NULL;
+
+	if (enc != NULL)
+	{
+		UINT server_port = c->server_port;
+		UINT client_port = c->client_port;
+
+		// Overwrite the encrypted result
+		Copy(esp + sizeof(UINT) * 2 + block_size, enc->Buf, encrypted_payload_size);
+
+		FreeBuf(enc);
+
+		void* hmac = Ikev2CalcInteg(param->setting->integ, param->key_data->sk_ar, esp, sizeof(UINT) * 2 + block_size + encrypted_payload_size);
+		Copy(esp + sizeof(UINT) * 2 + block_size + encrypted_payload_size, hmac, hash_size);
+		//*(UCHAR *)(esp + sizeof(UINT) * 2 + sa->TransformSetting.Crypto->BlockSize + encrypted_payload_size) = 0xff;
+
+		/*if (sa->TransformSetting.CapsuleMode == IKE_P2_CAPSULE_TRANSPORT ||
+			sa->TransformSetting.CapsuleMode == IKE_P2_CAPSULE_TUNNEL)
+		{
+			server_port = client_port = IPSEC_PORT_IPSEC_ESP_RAW;
+		}*/
+
+		// Add the completed packet to the transmission list
+		Ikev2SendData(ike, &c->server_ip, server_port, &c->client_ip, client_port, esp, esp_size, IKE_UDP_TYPE_ESP);
+		/*IkeSendUdpPacket(ike, IKE_UDP_TYPE_ESP, &c->server_ip, server_port, &c->client_ip, client_port,
+			esp, esp_size);
+*/
+		//sa->TotalSize += esp_size;
+
+		//if (sa->CurrentSeqNo >= 0xf0000000)
+		//{
+		//	start_qm = true;
+		//}
+
+		/*if (sa->TransformSetting.LifeKilobytes != 0)
+		{
+			UINT64 hard_size = (UINT64)sa->TransformSetting.LifeKilobytes * (UINT64)1000;
+			UINT64 soft_size = hard_size * (UINT64)2 / (UINT64)3;
+
+			if (sa->TotalSize >= soft_size)
+			{
+				start_qm = true;
+			}
+		}
+
+		if (start_qm)
+		{
+			if (sa->StartQM_FlagSet == false)
+			{
+				sa->StartQM_FlagSet = true;
+				c->StartQuickModeAsSoon = true;
+			}
+		}*/
+	}
+	else
+	{
+		// Encryption failure
+		Free(esp);
+	}
+	Free(IV);
 }
 
 bool Ikev2HasAlreadyInit(IKEv2_SERVER *ike, UINT64 SPI, UDPPACKET *p) {
@@ -3336,10 +3608,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateSK(LIST* payloads, IKEv2_CRYPTO_PARAM* cparam) 
 	void* IV = Ikev2CreateIV(block_size);
 	sk->init_vector = NewBufFromMemory(IV, block_size);
 
-	// Is it in BIG ENDIAN or not? Maybe this is not true
 	BUF* pay_buf = Ikev2BuildPayloadList(payloads);
-	//DbgBuf("Encoded payloads", pay_buf);
-
 	UINT pay_size = pay_buf->Size + 1;
 	UINT rest_pad = pay_size % block_size;
 	UCHAR pad_length = (rest_pad == 0) ? 0 : block_size - rest_pad;
@@ -4134,6 +4403,17 @@ void* Ikev2CalcInteg(IKEv2_INTEG* integ, void* key, void* text, UINT text_size) 
 	}
 
 	return ret;
+}
+
+void Ikev2SendData(IKEv2_SERVER* s, IP* srcIP, UINT srcPort, IP* destIP, UINT destPort, UCHAR* data, UINT size, USHORT type) {
+	if (s == NULL || data == NULL) {
+		return;
+	}
+
+	UDPPACKET* udp = NewUdpPacket(srcIP, srcPort, destIP, destPort, data, size);
+	udp->Type = type;
+
+	Add(s->SendPacketList, udp);
 }
 
 void Ikev2SendPacket(IKEv2_SERVER* s, IKEv2_CLIENT* client, IKEv2_PACKET* p, IKEv2_CRYPTO_PARAM* param) {

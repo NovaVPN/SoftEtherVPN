@@ -100,6 +100,10 @@ typedef struct IKEv2_CLIENT {
 
 	IP client_ip;
 	UINT client_port;
+
+	IP tunnelServerIP;
+	IP tunnelClientIP;
+	UINT tunnelIPID;
 } IKEv2_CLIENT;
 
 typedef struct IKEv2_SA {
@@ -125,8 +129,11 @@ typedef struct IKEv2_SA {
 
 typedef struct IKEv2_IPSECSA {
 	UINT SPI;
+	UINT seqNumber;
 	IKEv2_CRYPTO_PARAM* param;
 	IKEv2_SA* ike_sa;
+
+	IKEv2_CLIENT* client;
 	
 	bool isClosed;
 } IKEv2_IPSECSA;
@@ -255,4 +262,8 @@ void Ikev2SendPacket(IKEv2_SERVER* s, IKEv2_CLIENT* client, IKEv2_PACKET* p, IKE
 void Ikev2SendPacketByAddress(IKEv2_SERVER* s, IP* srcIP, UINT srcPort, IP* destIP, UINT destPort, IKEv2_PACKET* p, IKEv2_CRYPTO_PARAM* param);
 
 IKEv2_IPSECSA* Ikev2FindIPSECSA(IKEv2_SERVER* ike, UINT SPI);
+void Ikev2SendPacketByIPsecSa(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UCHAR *data, UINT data_size, UCHAR protocol_id);
+void Ikev2SendPacketByIPsecSaInner(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UCHAR *data, UINT data_size, UCHAR protocol_id);
+void Ikev2SendData(IKEv2_SERVER* s, IP* srcIP, UINT srcPort, IP* destIP, UINT destPort, UCHAR* data, UINT size, USHORT type);
+void Ikev2IPsecSendUdpPacket(IKEv2_SERVER *ike, IKEv2_IPSECSA *c, UINT src_port, UINT dst_port, UCHAR *data, UINT data_size);
 #endif // IKEv2_H
