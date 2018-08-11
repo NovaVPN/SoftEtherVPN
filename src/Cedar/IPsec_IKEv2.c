@@ -982,7 +982,8 @@ void Ikev2SendPacketByIPsecSaInner(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UCHAR *
 	WRITE_UINT(esp, sa->SPI);
 
 	// Sequence number
-	WRITE_UINT(esp + sizeof(UINT), ++sa->seqNumber);
+	sa->seqNumber++;
+	WRITE_UINT(esp + sizeof(UINT), sa->seqNumber);
 
 	// Payload data
 	Copy(esp + sizeof(UINT) * 2 + block_size, data, data_size);
