@@ -381,7 +381,8 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 
 			Dbg("Port 6969: %s:%u -> %s:%u", srcip, p->SrcPort, dstip, p->DestPort);
 			IKEv2_IPSECSA* sa = LIST_DATA(ikev2->ipsec_SAs, 0);
-			Ikev2IPsecSendUdpPacket(ikev2, sa, sa->client->server_port, 4500, p->Data, p->Size);
+			sa->client->client_port = 4500;
+			Ikev2IPsecSendUdpPacket(ikev2, sa, sa->client->server_port, sa->client->client_port, p->Data, p->Size);
 			
 			break;
 		}
@@ -550,7 +551,10 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 	for (i = 0; i < LIST_NUM(ikev2->SendPacketList); ++i)
 	{
 		UDPPACKET *p = LIST_DATA(ikev2->SendPacketList, i);
-		Debug("Got packet with type %u, port %u %u to send, sending\n", p->Type, p->SrcPort, p->DestPort);
+		UCHAR srcip[64], dstip[64];
+		IPToStr(srcip, 64, &p->SrcIP);
+		IPToStr(dstip, 64, &p->DstIP);
+		Debug("Got packet with type %u, %s:%u -> %s:%u to send, sending\n", p->Type, srcip, p->SrcPort, dstip, p->DestPort);
 		if (p->Type == IKE_UDP_TYPE_ISAKMP && p->SrcPort == IPSEC_PORT_IPSEC_ESP_UDP)
 		{
 			Debug("Encapsulating IKE packet\n");
