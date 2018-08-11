@@ -381,7 +381,7 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 
 			Dbg("Port 6969: %s:%u -> %s:%u", srcip, p->SrcPort, dstip, p->DestPort);
 			IKEv2_IPSECSA* sa = LIST_DATA(ikev2->ipsec_SAs, 0);
-			sa->client->server_port = 4500;
+			sa->client->server_port = 500;
 			sa->client->client_port = 4500;
 			Ikev2IPsecSendUdpPacket(ikev2, sa, sa->client->server_port, sa->client->client_port, p->Data, p->Size);
 			
