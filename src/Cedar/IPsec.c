@@ -570,8 +570,8 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 		else if (p->Type == IKE_UDP_TYPE_ESP && p->SrcPort == IPSEC_PORT_IPSEC_ISAKMP)
 		{
 			// START RECURSION
-			IKEv2_CRYPTO_PARAM* prm = LIST_DATA(s->Ikev2->ipsec_SAs, 0);
-			prm->key_data->sk_ai = prm->key_data->sk_ar;
+			IKEv2_IPSECSA* sa = LIST_DATA(s->Ikev2->ipsec_SAs, 0);
+			sa->param->key_data->sk_ai = sa->param->key_data->sk_ar;
 			IPsecProcESPPacketToServer(s->Ike, s->Ikev2, p);
 			Debug("Encapsulating ESP packet\n");
 			// Add the Non-IKE Marker
