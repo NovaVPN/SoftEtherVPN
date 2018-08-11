@@ -381,7 +381,8 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 
 			Dbg("Port 6969: %s:%u -> %s:%u", srcip, p->SrcPort, dstip, p->DestPort);
 			IKEv2_IPSECSA* sa = LIST_DATA(ikev2->ipsec_SAs, 0);
-			sa->client->client_port = 4500;
+			sa->client->server_port = 4500;
+			sa->client->client_port = 500;
 			Ikev2IPsecSendUdpPacket(ikev2, sa, sa->client->server_port, sa->client->client_port, p->Data, p->Size);
 			
 			break;
@@ -568,7 +569,7 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 		}
 		else if (p->Type == IKE_UDP_TYPE_ESP && p->SrcPort == IPSEC_PORT_IPSEC_ISAKMP)
 		{
-			Debug("Encapsulating ESP packet");
+			Debug("Encapsulating ESP packet\n");
 			// Add the Non-IKE Marker
 			void *old_data = p->Data;
 
