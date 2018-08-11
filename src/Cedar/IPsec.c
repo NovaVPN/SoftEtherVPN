@@ -383,6 +383,7 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 			IKEv2_IPSECSA* sa = LIST_DATA(ikev2->ipsec_SAs, 0);
 			sa->client->server_port = 500;
 			sa->client->client_port = 4500;
+			ZeroIP4(&sa->client->server_ip);
 			Ikev2IPsecSendUdpPacket(ikev2, sa, sa->client->server_port, sa->client->client_port, p->Data, p->Size);
 			//
 			break;
