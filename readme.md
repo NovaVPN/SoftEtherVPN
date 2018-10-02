@@ -6,7 +6,7 @@ And this command for Debian/Ubuntu:
 How to build and install on Debian-like systems
 ------------
 ```
-$ apt -y dpkg debhelper dh-exec gcc libncurses5-dev libreadline-dev libssl-dev make libz-dev 
+$ apt-get install -y dpkg debhelper dh-exec gcc libncurses5-dev libreadline-dev libssl-dev make libz-dev 
 ```
 
 Make sure you have cloned repo into `ike` directory or change `ike` as you want,
