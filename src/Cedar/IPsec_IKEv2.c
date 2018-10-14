@@ -550,13 +550,12 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 	dec = Ikev2Decrypt(encrypted_payload_data, size_of_payload_data, param);
 	param->key_data->IV = NULL;
 	
-	Dbg("Decrypting ended");
-	if (dec != NULL) {
+	if (dec == NULL) {
         Dbg("Decrypting failed");
         return;
 	}
 
-	Dbg("Decrypted ok");
+	Dbg("Decrypting ended");
 	UCHAR *dec_data = dec->Buf;
 	UINT dec_size = dec->Size;
 	UCHAR size_of_padding = dec_data[dec_size - 2];
