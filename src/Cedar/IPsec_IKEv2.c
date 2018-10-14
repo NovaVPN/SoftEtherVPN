@@ -632,7 +632,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 
         Dbg("parsing success");
         // Parsing success
-        if (pkt->TypeL3 != L3_IPV4 {
+        if (pkt->TypeL3 != L3_IPV4) {
 			Dbg("got IPv6, skipped");
 			FreePacket(pkt);
 			return;
@@ -1131,7 +1131,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateCPReply(IKEv2_SERVER *ike, IKEv2_CP_PAYLOAD* re
 IKEv2_PACKET_PAYLOAD* Ikev2CreateNATNotify(UINT64 SPIi, UINT64 SPIr, IP* ip, UINT port, USHORT type) {
 	IKEv2_PACKET_PAYLOAD* reply = Ikev2CreatePacketPayload(IKEv2_NOTIFY_PAYLOAD_T, sizeof(IKEv2_NOTIFY_PAYLOAD));
 	if (reply == NULL) {
-		return;
+		return NULL;
 	}
 
 	IKEv2_NOTIFY_PAYLOAD* ret = reply->data;
