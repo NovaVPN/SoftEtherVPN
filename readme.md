@@ -22,4 +22,3 @@ $ vpnserver start
 
 Don't forget to configure hub, user and do `IPsecEnable` to enable ike1/2 and specify
 PSK in vpncmd tool.
-
