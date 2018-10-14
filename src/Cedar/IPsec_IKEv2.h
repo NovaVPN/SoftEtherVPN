@@ -187,15 +187,16 @@ void Ikev2FreeCryptoEngine(IKEv2_CRYPTO_ENGINE* engine);
 void Ikev2FreeCryptoEncr(IKEv2_ENCR* encr);
 
 void ProcessIKEv2PacketRecv(IKEv2_SERVER *ike, UDPPACKET *p); // global
-//void ProcessIKEv2SAInitExchange(IKEv2_SERVER *ike, UDPPACKET *p);
-//void ProcessIKEv2AuthExchange(IKEv2_SERVER *ike, UDPPACKET *p);
-//void ProcessIKEv2CreateChildSAExchange(IKEv2_SERVER *ike, UDPPACKET *p);
-//void ProcessIKEv2InformatinalExchange(IKEv2_SERVER *ike, UDPPACKET *p);
+void ProcessIKEv2SAInitExchange(IKEv2_SERVER *ike, IKEv2_PACKET *hdr,  UDPPACKET *p);
+void ProcessIKEv2AuthExchange(IKEv2_SERVER *ike,IKEv2_PACKET *hdr,  UDPPACKET *p);
+void ProcessIKEv2CreateChildSAExchange(IKEv2_SERVER *ike,IKEv2_PACKET *hdr,  UDPPACKET *p);
+void ProcessIKEv2InformatinalExchange(IKEv2_SERVER *ike,IKEv2_PACKET *hdr,  UDPPACKET *p);
 void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT SPI, IKEv2_IPSECSA* sa, UCHAR* src, UINT src_size);
 
 void Ikev2FreePacket(IKEv2_PACKET *p);
 void Ikev2FreePayloadList(LIST *payloads);
 void Ikev2FreePayload(IKEv2_PACKET_PAYLOAD *p);
+void Ikev2FreeIPSECSA(IKEv2_IPSECSA* sa);
 
 //int Ikev2ProcessInformatonalPacket(IKEv2_PACKET *header);
 

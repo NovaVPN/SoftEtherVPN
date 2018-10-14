@@ -460,19 +460,19 @@ void ProcessIKEv2PacketRecv(IKEv2_SERVER *ike, UDPPACKET *p) {
 
 	switch (header->ExchangeType) {
 	case IKEv2_SA_INIT:
-		ProcessIKEv2SAInitExchange(header, ike, p);
+		ProcessIKEv2SAInitExchange(ike, header, p);
 		break;
 
 	case IKEv2_AUTH:
-		ProcessIKEv2AuthExchange(header, ike, p);
+		ProcessIKEv2AuthExchange(ike, header, p);
 		break;
 
 	case IKEv2_CREATE_CHILD_SA:
-		ProcessIKEv2CreateChildSAExchange(header, ike, p);
+		ProcessIKEv2CreateChildSAExchange(ike, header, p);
 		break;
 
 	case IKEv2_INFORMATIONAL:
-		ProcessIKEv2InformatinalExchange(header, ike, p);
+		ProcessIKEv2InformatinalExchange(ike, header, p);
 		break;
 	}
 
