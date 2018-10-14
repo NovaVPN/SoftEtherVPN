@@ -1156,7 +1156,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateNATNotify(UINT64 SPIi, UINT64 SPIr, IP* ip, UIN
 }
 
 // IKEv2 SA_INIT
-void ProcessIKEv2SAInitExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET *p) {
+void ProcessIKEv2SAInitExchange(IKEv2_SERVER *ike, IKEv2_PACKET* header, UDPPACKET *p) {
 	if (ike == NULL || header == NULL || p == NULL) {
 		return;
 	}
@@ -1519,7 +1519,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateTSr(IKEv2_SERVER* ike, IKEv2_TS_PAYLOAD* ask) {
 }
 
 //SK{IDi, AUTH, SAi2, TSi, TSr}
-void ProcessIKEv2AuthExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET *p) {
+void ProcessIKEv2AuthExchange(IKEv2_SERVER *ike, IKEv2_PACKET* header,  UDPPACKET *p) {
 	if (ike == NULL || p == NULL) {
 		return;
 	}
@@ -1874,7 +1874,7 @@ end:
 	Dbg("SA_AUTH: exit");
 }
 
-void ProcessIKEv2CreateChildSAExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET *p) {
+void ProcessIKEv2CreateChildSAExchange(IKEv2_SERVER *ike, IKEv2_PACKET* header, UDPPACKET *p) {
 	if (ike == NULL || p == NULL) {
 		Dbg("Null args in CREATE_CHILD_SA");
 		return;
@@ -3705,7 +3705,7 @@ bool Ikev2DeleteChildSA(IKEv2_SERVER* ike, IKEv2_SA* parent, UINT SPI) {
 	return false;
 }
 
-void ProcessIKEv2InformatinalExchange(IKEv2_PACKET* header, IKEv2_SERVER *ike, UDPPACKET *p) {
+void ProcessIKEv2InformatinalExchange(IKEv2_SERVER *ike,IKEv2_PACKET* header, UDPPACKET *p) {
 	if (header == NULL || ike == NULL || p == NULL) {
 		return;
 	}
