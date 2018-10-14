@@ -124,21 +124,19 @@ void ProcIKEPacketRecv(IKE_SERVER *ike, UDPPACKET *p)
 		return;
 	}
 
-	if (p->Type == IKE_UDP_TYPE_ISAKMP)
+	// ISAKMP (IKE) packet
+	IKE_PACKET *header;
+
+	header = ParseIKEPacketHeader(p);
+	if (header == NULL)
 	{
-		// ISAKMP (IKE) packet
-		IKE_PACKET *header;
+		return;
+	}
 
-		header = ParseIKEPacketHeader(p);
-		if (header == NULL)
-		{
-			return;
-		}
+	//Debug("InitiatorCookie: %I64u, ResponderCookie: %I64u\n", header->InitiatorCookie, header->ResponderCookie);
 
-		//Debug("InitiatorCookie: %I64u, ResponderCookie: %I64u\n", header->InitiatorCookie, header->ResponderCookie);
-
-		switch (header->ExchangeType)
-		{
+	switch (header->ExchangeType)
+	{
 		case IKE_EXCHANGE_TYPE_MAIN:	// Main mode
 			ProcIkeMainModePacketRecv(ike, p, header);
 			break;
@@ -154,15 +152,9 @@ void ProcIKEPacketRecv(IKE_SERVER *ike, UDPPACKET *p)
 		case IKE_EXCHANGE_TYPE_INFORMATION:	// Information exchange
 			ProcIkeInformationalExchangePacketRecv(ike, p, header);
 			break;
-		}
+	}
 
-		IkeFree(header);
-	}
-	else if (p->Type == IKE_UDP_TYPE_ESP)
-	{
-		// ESP packet
-		ProcIPsecEspPacketRecv(ike, p);
-	}
+	IkeFree(header);
 }
 
 // Send a packet via IPsec

@@ -374,20 +374,20 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 
 		switch (p->DestPort)
 		{
-		case 6969: {
-			char srcip[64], dstip[64];
-			IPToStr(srcip, 64, &p->SrcIP);
-			IPToStr(dstip, 64, &p->DstIP);
-
-			Dbg("Port 6969: %s:%u -> %s:%u", srcip, p->SrcPort, dstip, p->DestPort);
-			IKEv2_IPSECSA* sa = LIST_DATA(ikev2->ipsec_SAs, 0);
-			sa->client->server_port = 500;
-			sa->client->client_port = 4500;
-			ZeroIP4(&sa->client->server_ip);
-			Ikev2IPsecSendUdpPacket(ikev2, sa, sa->client->server_port, sa->client->client_port, p->Data, p->Size);
-			//
-			break;
-		}
+//		case 6969: {
+//			char srcip[64], dstip[64];
+//			IPToStr(srcip, 64, &p->SrcIP);
+//			IPToStr(dstip, 64, &p->DstIP);
+//
+//			Dbg("Port 6969: %s:%u -> %s:%u", srcip, p->SrcPort, dstip, p->DestPort);
+//			IKEv2_IPSECSA* sa = LIST_DATA(ikev2->ipsec_SAs, 0);
+//			sa->client->server_port = 500;
+//			sa->client->client_port = 4500;
+//			ZeroIP4(&sa->client->server_ip);
+//			Ikev2IPsecSendUdpPacket(ikev2, sa, sa->client->server_port, sa->client->client_port, p->Data, p->Size);
+//			//
+//			break;
+//		}
 		case IPSEC_PORT_L2TP:
 			// L2TP
 			ProcL2TPPacketRecv(l2tp, p);
@@ -414,9 +414,9 @@ void IPsecProcPacket(IPSEC_SERVER *s, UDPPACKET *p)
 				break;
 			}
 			case IKE_UDP_TYPE_ESP: {
-				Dbg("Got esp packet");
+				Dbg("got ESP packet");
+				// ProcIPsecEspPacketRecv(ike, p); // TODO global ESP handling
 				IPsecProcESPPacketToServer(ike, ikev2, p);
-				//ProcIPsecEspPacketRecv(ike, p); // TODO global ESP handling
 				break;
 			}
 			default: {
@@ -934,7 +934,7 @@ IPSEC_SERVER *NewIPsecServer(CEDAR *cedar)
 
 	s->L2TP = NewL2TPServer(cedar);
 	s->Ike = NewIKEServer(cedar, s);
-	
+
 	Dbg("Creating new IKEv2 server");
 	s->Ikev2 = NewIkev2Server(cedar, s);
 
