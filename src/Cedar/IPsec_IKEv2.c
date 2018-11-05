@@ -480,218 +480,218 @@ void ProcessIKEv2PacketRecv(IKEv2_SERVER *ike, UDPPACKET *p) {
 }
 
 void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* ipsec_sa, UCHAR* src, UINT src_size) {
-	Dbg("IKEv2 ESP init");
+  Dbg("IKEv2 ESP init");
 
-	UINT seq;
-	UINT block_size;
-	UINT hash_size;
-	UCHAR *iv;
-	UCHAR *hash;
-	UCHAR *encrypted_payload_data;
-	UINT size_of_payload_data;
-	BUF *dec;
+  UINT seq;
+  UINT block_size;
+  UINT hash_size;
+  UCHAR *iv;
+  UCHAR *hash;
+  UCHAR *encrypted_payload_data;
+  UINT size_of_payload_data;
+  BUF *dec;
 
-	bool update_status = false;
-	bool is_tunnel_mode = true; // for now it's true
-	
-	IKEv2_CRYPTO_PARAM* param = ipsec_sa->param;
-	// Get the sequence number
-	if (src_size < (sizeof(UINT) * 2))
-	{
-		return;
-	}
+  bool update_status = false;
+  bool is_tunnel_mode = true; // for now it's true
 
-	seq = READ_UINT(src + sizeof(UINT));
-	Dbg("Seq: %u", seq);
-	//is_tunnel_mode = IsIPsecSaTunnelMode(ipsec_sa);
+  IKEv2_CRYPTO_PARAM* param = ipsec_sa->param;
+  // Get the sequence number
+  if (src_size < (sizeof(UINT) * 2))
+  {
+    return;
+  }
 
-	IKEv2_CLIENT* c = ipsec_sa->client;
+  seq = READ_UINT(src + sizeof(UINT));
+  Dbg("Seq: %u", seq);
+  //is_tunnel_mode = IsIPsecSaTunnelMode(ipsec_sa);
 
-	block_size = param->setting->encr->block_size;
-	hash_size = param->setting->integ->out_size;
+  IKEv2_CLIENT* c = ipsec_sa->client;
 
-	Dbg("Block size = %u, hash_size = %u", block_size, hash_size);
-	// Get the IV
-	if (src_size < (sizeof(UINT) * 2 + block_size + hash_size + block_size))
-	{
-		return;
-	}
+  block_size = param->setting->encr->block_size;
+  hash_size = param->setting->integ->out_size;
 
-	// Get the hash
-	hash = src + src_size - hash_size;
+  Dbg("Block size = %u, hash_size = %u", block_size, hash_size);
+  // Get the IV
+  if (src_size < (sizeof(UINT) * 2 + block_size + hash_size + block_size))
+  {
+    return;
+  }
 
-	// Inspect the HMAC
-	void* calced_hash = Ikev2CalcInteg(ipsec_sa->param->setting->integ, ipsec_sa->param->key_data->sk_ai, src, src_size - hash_size);
-	if (Cmp(calced_hash, hash, hash_size) != 0) {
-		Dbg("Hashes are not same");
-		Free(calced_hash);
-		return;
-	}
+  // Get the hash
+  hash = src + src_size - hash_size;
 
-	Free(calced_hash);
+  // Inspect the HMAC
+  void* calced_hash = Ikev2CalcInteg(ipsec_sa->param->setting->integ, ipsec_sa->param->key_data->sk_ai, src, src_size - hash_size);
+  if (Cmp(calced_hash, hash, hash_size) != 0) {
+    Dbg("Hashes are not same");
+    Free(calced_hash);
+    return;
+  }
 
-	Dbg("OK, hashes are the same");
-	// Get the payload data
-	encrypted_payload_data = src + sizeof(UINT) * 2 + block_size;
-	size_of_payload_data = src_size - hash_size - block_size - sizeof(UINT) * 2;
-	DbgPointer("Encrypted data", encrypted_payload_data, size_of_payload_data);
+  Free(calced_hash);
 
-	if (size_of_payload_data == 0 || (size_of_payload_data % block_size) != 0)
-	{
-		Dbg("Not enough payload data");
-		// Payload data don't exist or is not a multiple of block size
-		return;
-	}
+  Dbg("OK, hashes are the same");
+  // Get the payload data
+  encrypted_payload_data = src + sizeof(UINT) * 2 + block_size;
+  size_of_payload_data = src_size - hash_size - block_size - sizeof(UINT) * 2;
+  DbgPointer("Encrypted data", encrypted_payload_data, size_of_payload_data);
 
-	Dbg("OK, decrypting");
+  if (size_of_payload_data == 0 || (size_of_payload_data % block_size) != 0)
+  {
+    Dbg("Not enough payload data");
+    // Payload data don't exist or is not a multiple of block size
+    return;
+  }
 
-	// Decrypt the payload data
-	param->key_data->IV = src + sizeof(UINT) * 2;
-	dec = Ikev2Decrypt(encrypted_payload_data, size_of_payload_data, param);
-	param->key_data->IV = NULL;
-	
-	if (dec == NULL) {
-        Dbg("Decrypting failed");
-        return;
-	}
+  Dbg("OK, decrypting");
 
-	Dbg("Decrypting ended");
-	UCHAR *dec_data = dec->Buf;
-	UINT dec_size = dec->Size;
-	UCHAR size_of_padding = dec_data[dec_size - 2];
-	UCHAR next_header = dec_data[dec_size - 1];
+  // Decrypt the payload data
+  param->key_data->IV = src + sizeof(UINT) * 2;
+  dec = Ikev2Decrypt(encrypted_payload_data, size_of_payload_data, param);
+  param->key_data->IV = NULL;
 
-	Dbg("Next header: %u", next_header);
-	DbgBuf("Dec", dec);
-	if ((dec_size - 2) < size_of_padding) {
-		return;
-	}
+  if (dec == NULL) {
+    Dbg("Decrypting failed");
+    return;
+  }
 
-	Dbg("Got actual payloads");
-	UINT orig_size = dec_size - 2 - size_of_padding;
-//	ipsec_sa->TotalSize += dec_size;
+  Dbg("Decrypting ended");
+  UCHAR *dec_data = dec->Buf;
+  UINT dec_size = dec->Size;
+  UCHAR size_of_padding = dec_data[dec_size - 2];
+  UCHAR next_header = dec_data[dec_size - 1];
 
-	if (!is_tunnel_mode) { // uncreachable
-		// Transport mode
-		switch (next_header) {
-			case IP_PROTO_UDP:
-				Dbg("UDP");
-				break;
-//			if (ike->IPsec->Services.L2TP_IPsec || ike->IPsec->Services.EtherIP_IPsec)
-//			{
-//				 // An UDP packet has been received
-//				Ikev2ProcIPsecUdpPacketRecv(ike, c, dec_data, dec_size);
-//			}
-			case IPSEC_IP_PROTO_ETHERIP:
-				Dbg("EtherIP");
-				break;
-//			if (ike->IPsec->Services.EtherIP_IPsec)
-//			{
-//				// An EtherIP packet has been received
-//				ProcIPsecEtherIPPacketRecv(ike, c, dec_data, dec_size, false);
-//			}
-			case IPSEC_IP_PROTO_L2TPV3:
-				Dbg("L2TPv3");
-				break;
-//			if (ike->IPsec->Services.EtherIP_IPsec)
-//			{
-//				// A L2TPv3 packet has been received
-//				ProcL2TPv3PacketRecv(ike, c, dec_data, dec_size, false);
-//			}
-		}
-		return;
-	}
-	// Tunnel Mode
-	if (next_header == IKE_PROTOCOL_ID_IPV4 || next_header == IKE_PROTOCOL_ID_IPV6) {
-		// Check the contents by parsing the IPv4 / IPv6 header in the case of tunnel mode
-		BUF *b = NewBuf();
-		static UCHAR src_mac_dummy[6] = { 0, 0, 0, 0, 0, 0, };
-		static UCHAR dst_mac_dummy[6] = { 0, 0, 0, 0, 0, 0, };
-		USHORT tpid = Endian16(MAC_PROTO_IPV4);
+  Dbg("Next header: %u", next_header);
+  DbgBuf("Dec", dec);
+  if ((dec_size - 2) < size_of_padding) {
+    return;
+  }
 
-		PKT *pkt;
+  Dbg("Got actual payloads");
+  UINT orig_size = dec_size - 2 - size_of_padding;
+  //	ipsec_sa->TotalSize += dec_size;
 
-		WriteBuf(b, src_mac_dummy, sizeof(src_mac_dummy));
-		WriteBuf(b, dst_mac_dummy, sizeof(dst_mac_dummy));
-		WriteBuf(b, &tpid, sizeof(tpid));
-		WriteBuf(b, dec_data, dec_size);
+  if (!is_tunnel_mode) { // uncreachable
+    // Transport mode
+    switch (next_header) {
+      case IP_PROTO_UDP:
+        Dbg("UDP");
+        break;
+        //			if (ike->IPsec->Services.L2TP_IPsec || ike->IPsec->Services.EtherIP_IPsec)
+        //			{
+        //				 // An UDP packet has been received
+        //				Ikev2ProcIPsecUdpPacketRecv(ike, c, dec_data, dec_size);
+        //			}
+      case IPSEC_IP_PROTO_ETHERIP:
+        Dbg("EtherIP");
+        break;
+        //			if (ike->IPsec->Services.EtherIP_IPsec)
+        //			{
+        //				// An EtherIP packet has been received
+        //				ProcIPsecEtherIPPacketRecv(ike, c, dec_data, dec_size, false);
+        //			}
+      case IPSEC_IP_PROTO_L2TPV3:
+        Dbg("L2TPv3");
+        break;
+        //			if (ike->IPsec->Services.EtherIP_IPsec)
+        //			{
+        //				// A L2TPv3 packet has been received
+        //				ProcL2TPv3PacketRecv(ike, c, dec_data, dec_size, false);
+        //			}
+    }
+    return;
+  }
+  // Tunnel Mode
+  if (next_header == IKE_PROTOCOL_ID_IPV4 || next_header == IKE_PROTOCOL_ID_IPV6) {
+    // Check the contents by parsing the IPv4 / IPv6 header in the case of tunnel mode
+    BUF *b = NewBuf();
+    static UCHAR src_mac_dummy[6] = { 0, 0, 0, 0, 0, 0, };
+    static UCHAR dst_mac_dummy[6] = { 0, 0, 0, 0, 0, 0, };
+    USHORT tpid = Endian16(MAC_PROTO_IPV4);
 
-		// Parse
-		pkt = ParsePacket(b->Buf, b->Size);
-		FreeBuf(b);
+    PKT *pkt;
 
-		if (pkt == NULL) {
-			Dbg("packet is NULL");
-			// Parsing failure
-			dec_data = NULL;
-			dec_size = 0;
-			FreePacket(pkt);
-			return;
-		}
+    WriteBuf(b, src_mac_dummy, sizeof(src_mac_dummy));
+    WriteBuf(b, dst_mac_dummy, sizeof(dst_mac_dummy));
+    WriteBuf(b, &tpid, sizeof(tpid));
+    WriteBuf(b, dec_data, dec_size);
 
-        Dbg("parsing success");
-        // Parsing success
-        if (pkt->TypeL3 != L3_IPV4) {
-			Dbg("got IPv6, skipped");
-			FreePacket(pkt);
-			return;
-		}
-		Dbg("got IPv4 packet");
-		// Save the internal IP address information
-		//UINTToIP(&c->TunnelModeServerIP, pkt->L3.IPv4Header->DstIP);
-		//UINTToIP(&c->TunnelModeClientIP, pkt->L3.IPv4Header->SrcIP);
+    // Parse
+    pkt = ParsePacket(b->Buf, b->Size);
+    FreeBuf(b);
 
-		UINTToIP(&c->tunnelServerIP, pkt->L3.IPv4Header->DstIP);
-		UINTToIP(&c->tunnelClientIP, pkt->L3.IPv4Header->SrcIP);
-		UCHAR dststr[64];
-		UCHAR srcstr[64];
-		IPToStr(dststr, 64, &c->tunnelServerIP);
-		IPToStr(srcstr, 64, &c->tunnelClientIP);
-		Dbg("src: %s, dst: %s proto: %u", srcstr, dststr, pkt->L3.IPv4Header->Protocol);
-		if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) != 0) {
-			Dbg("offset >= 0, exit");
-			FreePacket(pkt);
-			return;
-		}
+    if (pkt == NULL) {
+      Dbg("packet is NULL");
+      // Parsing failure
+      dec_data = NULL;
+      dec_size = 0;
+      FreePacket(pkt);
+      return;
+    }
 
-		Dbg("offset is 0, continue");
+    Dbg("parsing success");
+    // Parsing success
+    if (pkt->TypeL3 != L3_IPV4) {
+      Dbg("got IPv6, skipped");
+      FreePacket(pkt);
+      return;
+    }
+    Dbg("got IPv4 packet");
+    // Save the internal IP address information
+    //UINTToIP(&c->TunnelModeServerIP, pkt->L3.IPv4Header->DstIP);
+    //UINTToIP(&c->TunnelModeClientIP, pkt->L3.IPv4Header->SrcIP);
 
-		if ((IPV4_GET_FLAGS(pkt->L3.IPv4Header) & 0x01) != 0) {
-			Dbg("bad IPv4 flags provided, exit");
-			FreePacket(pkt);
-			return;
-		}
+    UINTToIP(&c->tunnelServerIP, pkt->L3.IPv4Header->DstIP);
+    UINTToIP(&c->tunnelClientIP, pkt->L3.IPv4Header->SrcIP);
+    UCHAR dststr[64];
+    UCHAR srcstr[64];
+    IPToStr(dststr, 64, &c->tunnelServerIP);
+    IPToStr(srcstr, 64, &c->tunnelClientIP);
+    Dbg("src: %s, dst: %s proto: %u", srcstr, dststr, pkt->L3.IPv4Header->Protocol);
+    if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) != 0) {
+      Dbg("offset >= 0, exit");
+      FreePacket(pkt);
+      return;
+    }
 
-		Dbg("flags are ok");
-		switch (pkt->L3.IPv4Header->Protocol) {
-        case 17:
-            Ikev2ProcIPsecUdpPacketRecv(ike, c, pkt, pkt->IPv4PayloadData, pkt->IPv4PayloadSize);
-            break;
-        case IPSEC_IP_PROTO_ETHERIP:
-            Dbg("decoded from ESP: EtherIP");
-            break;
-            // EtherIP
-            //if (ike->IPsec->Services.EtherIP_IPsec)
-            //{
-            //	// An EtherIP packet has been received
-            //	ProcIPsecEtherIPPacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize, true);
-            //}
-        case IPSEC_IP_PROTO_L2TPV3:
-            Dbg("decoded from ESP: L2TPV3");
-            break;
-            // L2TPv3
-            //if (ike->IPsec->Services.EtherIP_IPsec)
-            //{
-            //	// A L2TPv3 packet has been received
-            //	ProcL2TPv3PacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize, true);
-            //}
-		}
-        FreePacket(pkt);
-	}
+    Dbg("offset is 0, continue");
+
+    if ((IPV4_GET_FLAGS(pkt->L3.IPv4Header) & 0x01) != 0) {
+      Dbg("bad IPv4 flags provided, exit");
+      FreePacket(pkt);
+      return;
+    }
+
+    Dbg("flags are ok");
+    switch (pkt->L3.IPv4Header->Protocol) {
+      case 17:
+        Ikev2ProcIPsecUdpPacketRecv(ike, c, pkt, pkt->IPv4PayloadData, pkt->IPv4PayloadSize);
+        break;
+      case IPSEC_IP_PROTO_ETHERIP:
+        Dbg("decoded from ESP: EtherIP");
+        break;
+        // EtherIP
+        //if (ike->IPsec->Services.EtherIP_IPsec)
+        //{
+        //	// An EtherIP packet has been received
+        //	ProcIPsecEtherIPPacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize, true);
+        //}
+      case IPSEC_IP_PROTO_L2TPV3:
+        Dbg("decoded from ESP: L2TPV3");
+        break;
+        // L2TPv3
+        //if (ike->IPsec->Services.EtherIP_IPsec)
+        //{
+        //	// A L2TPv3 packet has been received
+        //	ProcL2TPv3PacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize, true);
+        //}
+    }
+    FreePacket(pkt);
+  }
 
 
-	update_status = true; // wtf
-	FreeBuf(dec);
+  update_status = true; // wtf
+  FreeBuf(dec);
 }
 
 // Send an UDP packet via IPsec
