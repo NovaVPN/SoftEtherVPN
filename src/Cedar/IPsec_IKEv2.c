@@ -651,11 +651,11 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 
     Dbg("offset is 0, continue");
 
-    if ((IPV4_GET_FLAGS(pkt->L3.IPv4Header) & 0x01) != 0) {
-      Dbg("bad IPv4 flags provided, exit");
-      FreePacket(pkt);
-      return;
-    }
+//    if ((IPV4_GET_FLAGS(pkt->L3.IPv4Header) & 0x01) != 0) {
+//      Dbg("bad IPv4 flags provided, exit");
+//      FreePacket(pkt);
+//      return;
+//    }
 
     Dbg("flags are ok");
     switch (pkt->L3.IPv4Header->Protocol) {
