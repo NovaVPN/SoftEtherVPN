@@ -660,8 +660,14 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
     Dbg("flags are ok");
     switch (pkt->L3.IPv4Header->Protocol) {
       case IP_PROTO_UDP:
-        Dbg("decoded from ESP: EtherIP");
+        Dbg("decoded from ESP: UDP");
+
         Ikev2ProcIPsecUdpPacketRecv(ike, c, pkt, pkt->IPv4PayloadData, pkt->IPv4PayloadSize);
+        IKEv2_IPSECSA* sa = LIST_DATA(ike->ipsec_SAs, 0);
+
+        sa->client->server_port = 500;
+        sa->client->client_port = 4500;
+        Ikev2IPsecSendUdpPacket(ike, sa, sa->client->server_port, sa->client->client_port, pkt->IPv4PayloadData, pkt->IPv4PayloadSize);
         break;
       case IPSEC_IP_PROTO_ETHERIP:
         Dbg("decoded from ESP: EtherIP");
@@ -694,7 +700,7 @@ void Ikev2IPsecSendUdpPacket(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UINT src_port
 	UCHAR *udp;
 	UINT udp_size;
 	UDP_HEADER *u;
-	bool no_free = false;
+
 	// Validate arguments
 	if (ike == NULL || sa == NULL || data == NULL || data_size == 0)
 	{
@@ -720,121 +726,75 @@ void Ikev2IPsecSendUdpPacket(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UINT src_port
 	// Payload
 	Copy(udp + sizeof(UDP_HEADER), data, data_size);
 
-	/*if (IsIP6(&c->ClientIP))
-	{
-		if (IsIPsecSaTunnelMode(c->CurrentIpSecSaSend) == false)
-		{
-			u->Checksum = CalcChecksumForIPv6((IPV6_ADDR *)c->TransportModeServerIP.ipv6_addr,
-				(IPV6_ADDR *)c->TransportModeClientIP.ipv6_addr,
-				IP_PROTO_UDP,
-				u,
-				udp_size, 0);
-		}
-		else
-		{
-			u->Checksum = CalcChecksumForIPv6((IPV6_ADDR *)c->TunnelModeServerIP.ipv6_addr,
-				(IPV6_ADDR *)c->TunnelModeClientIP.ipv6_addr,
-				IP_PROTO_UDP,
-				u,
-				udp_size, 0);
-		}
-	}*/
-
 	Ikev2SendPacketByIPsecSa(ike, sa, udp, udp_size, IP_PROTO_UDP);
-
-	if (no_free == false)
-	{
-		Free(udp);
-	}
+	Free(udp);
 }
 
 // Send a packet via IPsec
 void Ikev2SendPacketByIPsecSa(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UCHAR *data, UINT data_size, UCHAR protocol_id) {
 	// Validate arguments
-	if (ike == NULL || sa == NULL || data == NULL || data_size == 0)
-	{
-		return;
-	}
+  if (ike == NULL || sa == NULL || data == NULL || data_size == 0)
+  {
+    return;
+  }
 
-	if (sa->isClosed == true) {
-		Dbg("Used closed IPSECSA");
-		return;
-	}
+  if (sa->isClosed == true) {
+    Dbg("Used closed IPSECSA");
+    return;
+  }
 
-	//is_tunnel_mode = IsIPsecSaTunnelMode(sa);
-	bool is_tunnel_mode = true;
+  //is_tunnel_mode = IsIPsecSaTunnelMode(sa);
+  bool is_tunnel_mode = true;
 
-	IKEv2_CLIENT* c = sa->client;
-	if (c == NULL) {
-		return;
-	}
+  IKEv2_CLIENT* c = sa->client;
+  if (c == NULL) {
+    return;
+  }
 
-	if (is_tunnel_mode)
-	{
-		// Add an IPv4 / IPv6 header in the case of tunnel mode
-		if (IsZeroIP(&c->tunnelClientIP) == false || IsZeroIP(&c->tunnelServerIP) == false)
-		{
-			BUF *b;
-			UCHAR esp_proto_id;
+  if (!is_tunnel_mode) {
+    // Send as it is in the case of transport mode
+    Ikev2SendPacketByIPsecSaInner(ike, sa, data, data_size, protocol_id);
+    return;
+  }
+  // Add an IPv4 / IPv6 header in the case of tunnel mode
+  if (IsZeroIP(&c->tunnelClientIP) == false || IsZeroIP(&c->tunnelServerIP) == false)
+  {
+    BUF *b;
+    UCHAR esp_proto_id;
 
-			b = NewBuf();
+    b = NewBuf();
 
-			if (IsIP4(&c->tunnelClientIP))
-			{
-				// IPv4 header
-				IPV4_HEADER h;
+    if (!IsIP4(&c->tunnelClientIP)) {
+      Dbg("unsupported IP version");
+      return;
+    }
+    // IPv4 header
+    IPV4_HEADER h;
 
-				h.VersionAndHeaderLength = 0;
-				h.TypeOfService = 0;
-				IPV4_SET_VERSION(&h, 4);
-				IPV4_SET_HEADER_LEN(&h, sizeof(IPV4_HEADER) / 4);
-				h.TotalLength = Endian16((USHORT)(data_size + sizeof(IPV4_HEADER)));
-				h.Identification = Endian16(c->tunnelIPID++);
-				h.FlagsAndFlagmentOffset[0] = h.FlagsAndFlagmentOffset[1] = 0;
-				h.TimeToLive = DEFAULT_IP_TTL;
-				h.Protocol = protocol_id;
-				h.SrcIP = IPToUINT(&c->tunnelServerIP);
-				h.DstIP = IPToUINT(&c->tunnelClientIP);
-				h.Checksum = 0;
-				h.Checksum = IpChecksum(&h, sizeof(IPV4_HEADER));
+    IPV4_SET_VERSION(&h, 4);
+    IPV4_SET_HEADER_LEN(&h, sizeof(IPV4_HEADER) / 4);
 
-				WriteBuf(b, &h, sizeof(IPV4_HEADER));
+    h.VersionAndHeaderLength = 0;
+    h.TypeOfService = 0;
+    h.TotalLength = Endian16((USHORT)(data_size + sizeof(IPV4_HEADER)));
+    h.Identification = Endian16(c->tunnelIPID++);
+    h.FlagsAndFlagmentOffset[0] = h.FlagsAndFlagmentOffset[1] = 0;
+    h.TimeToLive = DEFAULT_IP_TTL;
+    h.Protocol = protocol_id;
+    h.SrcIP = IPToUINT(&c->tunnelServerIP);
+    h.DstIP = IPToUINT(&c->tunnelClientIP);
+    h.Checksum = 0;
+    h.Checksum = IpChecksum(&h, sizeof(IPV4_HEADER));
 
-				esp_proto_id = IKE_PROTOCOL_ID_IPV4;
-			}
-			else
-			{
-				// IPv6 header
-				IPV6_HEADER h;
+    esp_proto_id = IKE_PROTOCOL_ID_IPV4;
 
-				Zero(&h, sizeof(h));
-				h.VersionAndTrafficClass1 = 0;
-				IPV6_SET_VERSION(&h, 6);
-				h.TrafficClass2AndFlowLabel1 = 0;
-				h.FlowLabel2 = h.FlowLabel3 = 0;
-				h.PayloadLength = Endian16(data_size);
-				h.NextHeader = protocol_id;
-				h.HopLimit = 64;
-				Copy(h.SrcAddress.Value, c->tunnelServerIP.ipv6_addr, 16);
-				Copy(h.DestAddress.Value, c->tunnelClientIP.ipv6_addr, 16);
+    WriteBuf(b, &h, sizeof(IPV4_HEADER));
+    WriteBuf(b, data, data_size);
 
-				WriteBuf(b, &h, sizeof(IPV6_HEADER));
+    Ikev2SendPacketByIPsecSaInner(ike, sa, b->Buf, b->Size, esp_proto_id);
 
-				esp_proto_id = IKE_PROTOCOL_ID_IPV6;
-			}
-
-			WriteBuf(b, data, data_size);
-
-			Ikev2SendPacketByIPsecSaInner(ike, sa, b->Buf, b->Size, esp_proto_id);
-
-			FreeBuf(b);
-		}
-	}
-	else
-	{
-		// Send as it is in the case of transport mode
-		Ikev2SendPacketByIPsecSaInner(ike, sa, data, data_size, protocol_id);
-	}
+    FreeBuf(b);
+  }
 }
 
 void Ikev2SendPacketByIPsecSaInner(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UCHAR *data, UINT data_size, UCHAR protocol_id) {
