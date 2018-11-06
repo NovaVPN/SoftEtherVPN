@@ -643,11 +643,11 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
     IPToStr(srcstr, 64, &c->tunnelClientIP);
 
     Dbg("src: %s, dst: %s proto: %u", srcstr, dststr, pkt->L3.IPv4Header->Protocol);
-    if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) != 0) {
-      Dbg("offset >= 0, exit");
-      FreePacket(pkt);
-      return;
-    }
+//    if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) != 0) {
+//      Dbg("offset >= 0, exit");
+//      FreePacket(pkt);
+//      return;
+//    }
 
     Dbg("offset is 0, continue");
 
