@@ -17,7 +17,7 @@ pipeline:
     username: root
     secrets: [ ssh_key ]
     target: /root/ikev2
-    source: ../se-vpnserver*.deb
+    source: ../se-vpn*.deb
     rm: true
 
   deploy:
