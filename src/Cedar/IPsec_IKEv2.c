@@ -44,40 +44,34 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, U
 
 	src_port = Endian16(u->SrcPort);
 	dst_port = Endian16(u->DstPort);
-	Dbg("Dest port = %u", dst_port);
-	if (dst_port == IPSEC_PORT_L2TP)
-	{
-		Dbg("L2TP packet");
-		UDPPACKET p;
-		// A L2TP packet has been received
-		//IPsecIkeClientManageL2TPServer(ike, c);
+	Dbg("UDP: dst port = %u", dst_port);
 
-		//// Update Port number
-		//c->L2TPClientPort = src_port;
+	UDPPACKET p;
+	// A L2TP packet has been received
+	IPsecIkeClientManageL2TPServer(ike, c);
 
-		//// Pass the received packet to the L2TP server
-		//p.Type = 0;
-		//p.Data = data + sizeof(UDP_HEADER);
-		//p.DestPort = IPSEC_PORT_L2TP;
-		//Copy(&p.DstIP, &c->L2TPServerIP, sizeof(IP));
-		//p.Size = payload_size;
-		//Copy(&p.SrcIP, &c->L2TPClientIP, sizeof(IP));
-		//p.SrcPort = IPSEC_PORT_L2TP;
+	// Update Port number
+//	c->L2TPClientPort = src_port;
 
-		//ProcL2TPPacketRecv(c->L2TP, &p);
+	// Pass the received packet to the L2TP server
+	p.Type = 0;
+	p.Data = data + sizeof(UDP_HEADER);
+	p.DestPort = IPSEC_PORT_L2TP;
+	p.SrcPort = IPSEC_PORT_L2TP;
+	p.Size = payload_size;
 
-		//Debug("IPsec UDP Recv: %u <= %u %u\n", dst_port, src_port, p.Size);
+	Copy(&p.DstIP, &c->server_ip, sizeof(IP));
+	Copy(&p.SrcIP, &c->client_ip, sizeof(IP));
 
-#ifdef	RAW_DEBUG
-		IPsecIkeSendUdpForDebug(IPSEC_PORT_L2TP, 1, p.Data, p.Size);
-#endif	// RAW_DEBUG
-	}
-	else {
-		void* content = Malloc(payload_size);
-		Copy(content, data + sizeof(UDP_HEADER), payload_size);
-		UDPPACKET* p = NewUdpPacket(&pkt->L3.IPv4Header->SrcIP, 6969, &pkt->L3.IPv4Header->DstIP, dst_port, content, payload_size);
-		Add(ike->SendPacketList, p);
-	}
+//	ProcL2TPPacketRecv(c->L2TP, &p);
+
+	IPsecIkeSendUdpForDebug(dst_port, 1, p.Data, p.Size);
+//	{ //какая то тупая заглушка
+//		void* content = Malloc(payload_size);
+//		Copy(content, data + sizeof(UDP_HEADER), payload_size);
+//		UDPPACKET* p = NewUdpPacket(&pkt->L3.IPv4Header->SrcIP, 6969, &pkt->L3.IPv4Header->DstIP, dst_port, content, payload_size);
+//		Add(ike->SendPacketList, p);
+//	}
 }
 
 void Ikev2GetNotifications(IKEv2_NOTIFY_CONTAINER* c, LIST* payloads) {
@@ -571,7 +565,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
   UINT orig_size = dec_size - 2 - size_of_padding;
   //	ipsec_sa->TotalSize += dec_size;
 
-  if (!is_tunnel_mode) { // uncreachable
+  if (!is_tunnel_mode) { // uncreachable (for now?)
     // Transport mode
     switch (next_header) {
       case IP_PROTO_UDP:
@@ -647,6 +641,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
     UCHAR srcstr[64];
     IPToStr(dststr, 64, &c->tunnelServerIP);
     IPToStr(srcstr, 64, &c->tunnelClientIP);
+
     Dbg("src: %s, dst: %s proto: %u", srcstr, dststr, pkt->L3.IPv4Header->Protocol);
     if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) != 0) {
       Dbg("offset >= 0, exit");
@@ -664,7 +659,8 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 
     Dbg("flags are ok");
     switch (pkt->L3.IPv4Header->Protocol) {
-      case 17:
+      case IP_PROTO_UDP:
+        Dbg("decoded from ESP: EtherIP");
         Ikev2ProcIPsecUdpPacketRecv(ike, c, pkt, pkt->IPv4PayloadData, pkt->IPv4PayloadSize);
         break;
       case IPSEC_IP_PROTO_ETHERIP:
@@ -688,7 +684,6 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
     }
     FreePacket(pkt);
   }
-
 
   update_status = true; // wtf
   FreeBuf(dec);

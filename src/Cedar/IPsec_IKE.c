@@ -1029,6 +1029,7 @@ void IPsecIkeClientManageL2TPServer(IKE_SERVER *ike, IKE_CLIENT *c)
 	{
 		return;
 	}
+	Dbg("lol init L2TP over IKEv2 server");
 
 	if (c->L2TP == NULL)
 	{
