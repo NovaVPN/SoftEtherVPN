@@ -309,7 +309,7 @@ void Ikev2FreeServer(IKEv2_SERVER* server) {
 	}
 	ReleaseList(server->ipsec_SAs);
 
-	//IKE free
+	// IKE free
 	UINT sa_count = LIST_NUM(server->SAs);
 	for (UINT i = 0; i < sa_count; ++i) {
 		Ikev2FreeIKESA((IKEv2_SA*)(LIST_DATA(server->SAs, i)));
@@ -418,7 +418,6 @@ void Ikev2FreeCryptoEngine(IKEv2_CRYPTO_ENGINE* engine) {
 	}
 
 	Free(engine);
-	engine = NULL;
 }
 
 void Ikev2FreeCryptoEncr(IKEv2_ENCR* encr) {
@@ -615,7 +614,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
     FreeBuf(b);
 
     if (pkt == NULL) {
-      Dbg("packet is NULL");
+      Dbg("packet is NULL, exiting");
       // Parsing failure
       dec_data = NULL;
       dec_size = 0;
@@ -642,14 +641,14 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
     IPToStr(dststr, 64, &c->tunnelServerIP);
     IPToStr(srcstr, 64, &c->tunnelClientIP);
 
-    Dbg("src: %s, dst: %s proto: %u", srcstr, dststr, pkt->L3.IPv4Header->Protocol);
+    Dbg("src: %s dst: %s proto: %u", srcstr, dststr, pkt->L3.IPv4Header->Protocol);
 //    if (IPV4_GET_OFFSET(pkt->L3.IPv4Header) != 0) {
 //      Dbg("offset >= 0, exit");
 //      FreePacket(pkt);
 //      return;
 //    }
 
-    Dbg("offset is 0, continue");
+    Dbg("ipv4 offset is 0, continue");
 
 //    if ((IPV4_GET_FLAGS(pkt->L3.IPv4Header) & 0x01) != 0) {
 //      Dbg("bad IPv4 flags provided, exit");
@@ -657,7 +656,7 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 //      return;
 //    }
 
-    Dbg("flags are ok");
+    Dbg("ipv4 flags are ok, continue");
     switch (pkt->L3.IPv4Header->Protocol) {
       case IP_PROTO_UDP:
         Dbg("decoded from ESP: UDP");
