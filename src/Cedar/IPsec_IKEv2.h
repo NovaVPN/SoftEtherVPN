@@ -1,10 +1,11 @@
 #ifndef IKEv2_H
 #define IKEv2_H
-#include "IPsec_IkePacket.h"
-#include "IPsec_IKE.h"
-
-#include "IPsec_Ikev2Packet.h"
+#include "Cedar/CedarType.h"
 #include "Mayaqua/MayaType.h"
+
+#include "IPsec_IKE.h"
+#include "IPsec_IkePacket.h"
+#include "IPsec_Ikev2Packet.h"
 
 #ifndef __DEBUG_SHORTEN_MACROS__
 #define __DEBUG_SHORTEN_MACROS__

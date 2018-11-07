@@ -48,10 +48,10 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, U
 
 	UDPPACKET p;
 	// A L2TP packet has been received
-//	IPsecIkeClientManageL2TPServer(ike, c);
+  // IPsecIkeClientManageL2TPServer(ike, c);
 
 	// Update Port number
-//	c->L2TPClientPort = src_port;
+  // c->L2TPClientPort = src_port;
 
 	// Pass the received packet to the L2TP server
 	p.Type = 0;

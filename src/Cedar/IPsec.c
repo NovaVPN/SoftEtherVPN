@@ -556,10 +556,10 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 		UCHAR srcip[64], dstip[64];
 		IPToStr(srcip, 64, &p->SrcIP);
 		IPToStr(dstip, 64, &p->DstIP);
-		Debug("Got packet with type %u, %s:%u -> %s:%u to send, sending\n", p->Type, srcip, p->SrcPort, dstip, p->DestPort);
+		Debug("[IKEv1] Got packet with type %u, %s:%u -> %s:%u to send, sending\n", p->Type, srcip, p->SrcPort, dstip, p->DestPort);
 		if (p->Type == IKE_UDP_TYPE_ISAKMP && p->SrcPort == IPSEC_PORT_IPSEC_ESP_UDP)
 		{
-			Debug("Encapsulating IKE packet\n");
+			Debug("[IKEv1] Encapsulating IKE packet\n");
 			// Add the Non-ESP Marker
 			void *old_data = p->Data;
 
@@ -575,7 +575,7 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 			sa->param->key_data->sk_ai = sa->param->key_data->sk_ar;
 			sa->param->key_data->aes_key_d = sa->param->key_data->aes_key_e;*/
 			//IPsecProcESPPacketToServer(s->Ike, s->Ikev2, p);
-			Debug("Encapsulating ESP packet\n");
+			Debug("[IKEv1] Encapsulating IKE packet\n");
 			// Add the Non-IKE Marker
 			void *old_data = p->Data;
 
