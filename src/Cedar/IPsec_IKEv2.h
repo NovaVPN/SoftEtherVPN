@@ -96,15 +96,17 @@ typedef struct IKEv2_CRYPTO_PARAM {
 } IKEv2_CRYPTO_PARAM;
 
 typedef struct IKEv2_CLIENT {
-	IP server_ip;
-	UINT server_port;
+	IP server_ip, client_ip;
+	UINT server_port, client_port;
 
-	IP client_ip;
-	UINT client_port;
-
-	IP tunnelServerIP;
-	IP tunnelClientIP;
 	UINT tunnelIPID;
+	IP tunnelServerIP, tunnelClientIP;
+
+	// L2TP related shit
+	L2TP_SERVER *L2TP;						// L2TP server
+	UINT L2TPClientPort;					// Client-side port number of L2TP
+	IP L2TPServerIP, L2TPClientIP;// IP address used by the L2TP processing
+	bool IsL2TPOnIPsecTunnelMode;	// Whether the L2TP is working on IPsec tunnel mode
 } IKEv2_CLIENT;
 
 typedef struct IKEv2_SA {
@@ -140,14 +142,13 @@ typedef struct IKEv2_IPSECSA {
 } IKEv2_IPSECSA;
 
 typedef struct IKEv2_SERVER {
-	LIST* clients; // LIST of IKEv2_CLIENT
-	LIST* SAs; // LIST of IKEv2_SA for IKE
+	LIST* clients;   // LIST of IKEv2_CLIENT
+	LIST* SAs;       // LIST of IKEv2_SA for IKE
 	LIST* ipsec_SAs; // LIST of IKEv2_SA for IPSec
 
-	LIST* SendPacketList; // LIST of UDPPACKET
+	LIST* SendPacketList;        // LIST of UDPPACKET
 	IKEv2_CRYPTO_ENGINE* engine; // Cryptography pre-generated engine
-
-	IKE_SERVER* ike_server; // Need to handle: ALL clents, SockEvent, Interrupts.
+	IKE_SERVER* ike_server;      // Need to handle: ALL clents, SockEvent, Interrupts.
 } IKEv2_SERVER;
 
 typedef struct IKEv2_NOTIFY_CONTAINER {
@@ -182,6 +183,8 @@ IKEv2_CLIENT* NewIkev2Client(IP* clientIP, UINT clientPort, IP* serverIP, UINT s
 IKEv2_SA* Ikev2CreateSA(UINT64 SPIi, UINT64 SPIr, IKEv2_CRYPTO_SETTING* setting, IKEv2_CRYPTO_KEY_DATA* key_data);
 IKEv2_IPSECSA* Ikev2CreateIPsecSA(UINT SPI, IKEv2_SA* parent_IKESA, IKEv2_CRYPTO_KEY_DATA* key_data, IKEv2_CRYPTO_SETTING* setting);
 
+void Ikev2ClientManageL2TPServer(IKEv2_SERVER *ike, IKE_CLIENT *c);
+
 void Ikev2FreeServer(IKEv2_SERVER* server); // global
 void Ikev2FreeIKESA(IKEv2_SA* sa);
 void Ikev2FreeCryptoEngine(IKEv2_CRYPTO_ENGINE* engine);
@@ -198,6 +201,7 @@ void Ikev2FreePacket(IKEv2_PACKET *p);
 void Ikev2FreePayloadList(LIST *payloads);
 void Ikev2FreePayload(IKEv2_PACKET_PAYLOAD *p);
 void Ikev2FreeIPSECSA(IKEv2_IPSECSA* sa);
+void Ikev2FreeClient(IKEv2_CLIENT* c);
 
 //int Ikev2ProcessInformatonalPacket(IKEv2_PACKET *header);
 
@@ -208,8 +212,7 @@ BUF* Ikev2BuildPacket(IKEv2_PACKET *p);
 BUF* Ikev2BuildPayloadList(LIST *pay_list);
 BUF* Ikev2BuildPayload(IKEv2_PACKET_PAYLOAD *payload);
 
-IKEv2_PACKET*
-  Ikev2CreatePacket(UINT64 SPIi, UINT64 SPIr, UCHAR exchange_type, bool is_response,
+IKEv2_PACKET* Ikev2CreatePacket(UINT64 SPIi, UINT64 SPIr, UCHAR exchange_type, bool is_response,
       bool version, bool is_initiator, UINT msgID, LIST* payloads);
 
 IKEv2_PACKET_PAYLOAD* Ikev2CreatePacketPayload(UCHAR type, UINT sizeofData);
@@ -223,7 +226,7 @@ IKEv2_PACKET_PAYLOAD* Ikev2CreateEAP(UCHAR code, UCHAR id, UCHAR type, BUF* type
 IKEv2_PACKET_PAYLOAD* Ikev2CreateCP(IKEv2_CP_PAYLOAD *peer_conf, LIST* attributes, UCHAR cp_type);
 
 IKEv2_PACKET* ParseIKEv2PacketHeader(UDPPACKET *p);
-IKEv2_PACKET *Ikev2ParsePacket(IKEv2_PACKET* p, void *data, UINT size, IKEv2_CRYPTO_PARAM* cparam);
+IKEv2_PACKET* Ikev2ParsePacket(IKEv2_PACKET* p, void *data, UINT size, IKEv2_CRYPTO_PARAM* cparam);
 LIST* Ikev2ParsePayloadList(void *data, UINT size, UCHAR first_payload, UCHAR* next_last);
 IKEv2_PACKET_PAYLOAD* Ikev2DecodePayload(UCHAR payload_type, BUF *buf);
 
@@ -244,8 +247,7 @@ IKEv2_CRYPTO_KEY_DATA* IKEv2GenerateKeymatForIKESA(IKEv2_CRYPTO_SETTING* setting
 
 DH_CTX* Ikev2CreateDH_CTX(IKEv2_DH* dh);
 
-IKEv2_ENCR*
-  Ikev2CreateEncr(UCHAR type, bool is_fixed, UINT* key_sizes, UINT key_count, UINT min_key,
+IKEv2_ENCR* Ikev2CreateEncr(UCHAR type, bool is_fixed, UINT* key_sizes, UINT key_count, UINT min_key,
     UINT max_key, UINT default_key, UINT block_size);
 IKEv2_PRF* Ikev2CreatePRF(UCHAR type, UINT key_size);
 IKEv2_INTEG* Ikev2CreateInteg(UCHAR type, UINT key_size, UINT out_size);

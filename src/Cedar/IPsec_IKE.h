@@ -114,6 +114,10 @@
 #ifndef	IPSEC_IKE_H
 #define	IPSEC_IKE_H
 
+#include "CedarType.h"
+#include "IPsec_IkePacket.h"
+#include "MayaType.h"
+
 //// Macro
 
 //// Constants

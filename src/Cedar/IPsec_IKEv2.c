@@ -63,7 +63,7 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, U
 	Copy(&p.DstIP, &c->server_ip, sizeof(IP));
 	Copy(&p.SrcIP, &c->client_ip, sizeof(IP));
 
-//	ProcL2TPPacketRecv(c->L2TP, &p);
+	ProcL2TPPacketRecv(c->L2TP, &p);
 
 	IPsecIkeSendUdpForDebug(dst_port, 1, p.Data, p.Size);
 //	{ //какая то тупая заглушка
@@ -127,6 +127,49 @@ void Ikev2GetNotifications(IKEv2_NOTIFY_CONTAINER* c, LIST* payloads) {
 	}
 
 	ReleaseList(allNtf);
+}
+
+// Manage the L2TP server that is associated with the IKE_CLIENT
+void Ikev2ClientManageL2TPServer(IKEv2_SERVER *ike, IKE_CLIENT *c) {
+	if (ike == NULL || c == NULL) {
+		return;
+	}
+
+	if (c->L2TP == NULL) {
+		UINT crypt_block_size = IKE_MAX_BLOCK_SIZE;
+
+		if (c->CurrentIpSecSaRecv != NULL) {
+			crypt_block_size = c->CurrentIpSecSaRecv->TransformSetting.Crypto->BlockSize;
+		}
+
+		c->L2TP = NewL2TPServerEx(ike->ike_server->Cedar, ike, false, crypt_block_size);
+		c->L2TP->IkeClient = c;
+
+		Copy(&c->L2TPServerIP, &c->ServerIP, sizeof(IP));
+		Copy(&c->L2TPClientIP, &c->ClientIP, sizeof(IP));
+
+		if (c->CurrentIpSecSaRecv != NULL) {
+			Format(c->L2TP->CryptName, sizeof(c->L2TP->CryptName),
+						 "IPsec - %s (%u bits)",
+						 c->CurrentIpSecSaRecv->TransformSetting.Crypto->Name,
+						 c->CurrentIpSecSaRecv->TransformSetting.CryptoKeySize * 8);
+		}
+
+		Debug("IKE_CLIENT 0x%X: L2TP Server Started.\n", c);
+
+		IPsecLog(ike, c, NULL, NULL, "LI_L2TP_SERVER_STARTED");
+	}
+
+	L2TP_SERVER* l2tp = c->L2TP;
+	if (l2tp->Interrupts == NULL) {
+		l2tp->Interrupts = ike->ike_server->Interrupts;
+	}
+
+	if (l2tp->SockEvent == NULL) {
+		SetL2TPServerSockEvent(l2tp, ike->ike_server->SockEvent);
+	}
+
+	l2tp->Now = ike->ike_server->Now;
 }
 
 /* IKEv2 SERVER INITIALIZATION STRUCTURES */
@@ -430,7 +473,20 @@ void Ikev2FreeCryptoEncr(IKEv2_ENCR* encr) {
 	}
 }
 
-/* IKEv2 PACKET PROCCESSING */
+void Ikev2FreeClient(IKEv2_CLIENT* c) {
+	if (c == NULL) {
+		return;
+	}
+
+	if (c->L2TP != NULL) {
+		StopL2TPServer(c->L2TP, true);
+		FreeL2TPServer(c->L2TP);
+	}
+
+	Free(c);
+}
+
+/* IKEv2 PACKET PROCESSING */
 
 bool Ikev2IsSupportedPayload(UCHAR payload_type) {
 	return (payload_type == IKEv2_NO_NEXT_PAYLOAD_T) ||
@@ -1440,12 +1496,12 @@ IKEv2_CRYPTO_KEY_DATA* IKEv2CreateKeymatWithDHForChildSA(IKEv2_PRF* prf, void* s
 
 IKEv2_PACKET_PAYLOAD* Ikev2CreateTSr(IKEv2_SERVER* ike, IKEv2_TS_PAYLOAD* ask) {
 	if (ike == NULL || ask == NULL) {
-		return;
+		return NULL;
 	}
 
 	IKEv2_PACKET_PAYLOAD* ret = Ikev2CreatePacketPayload(IKEv2_TSr_PAYLOAD_T, sizeof(IKEv2_TS_PAYLOAD));
 	if (ret == NULL) {
-		return;
+		return NULL;
 	}
 
 	IKEv2_TS_PAYLOAD* ts = ret->data;
