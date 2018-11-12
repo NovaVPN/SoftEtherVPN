@@ -68,7 +68,7 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, U
   p.SrcPort = IPSEC_PORT_L2TP;
 
   ProcL2TPPacketRecv(c->L2TP, &p);
-  Dbg("sending IPsec (ikev2) UDP dst: %u src: %u %u of size %u", dst_port, src_port, p.Size);
+  Dbg("sending IPsec (ikev2) UDP dst: %u src: %u of size %u", dst_port, src_port, p.Size);
 }
 
 
