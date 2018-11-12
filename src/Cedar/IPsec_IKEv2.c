@@ -67,8 +67,8 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, U
   Copy(&p.SrcIP, &c->L2TPClientIP, sizeof(IP));
   p.SrcPort = IPSEC_PORT_L2TP;
 
-  ProcL2TPPacketRecv(c->L2TP, &p);
   Dbg("sending IPsec (ikev2) UDP dst: %u src: %u of size %u", dst_port, src_port, p.Size);
+  ProcL2TPPacketRecv(c->L2TP, &p);
 }
 
 
@@ -714,10 +714,8 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
       return;
     }
     Dbg("got IPv4 packet");
-    // Save the internal IP address information
-    //UINTToIP(&c->TunnelModeServerIP, pkt->L3.IPv4Header->DstIP);
-    //UINTToIP(&c->TunnelModeClientIP, pkt->L3.IPv4Header->SrcIP);
 
+    // Save the internal IP address information
     UINTToIP(&c->tunnelServerIP, pkt->L3.IPv4Header->DstIP);
     UINTToIP(&c->tunnelClientIP, pkt->L3.IPv4Header->SrcIP);
     UCHAR dststr[64];
