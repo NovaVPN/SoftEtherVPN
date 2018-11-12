@@ -507,7 +507,12 @@ void IPsecServerUdpPacketRecvProc(UDPLISTENER *u, LIST *packet_list)
 		{
 			UDPPACKET *p = LIST_DATA(packet_list, i);
 			Debug("\n");
-			Dbg("Recieved IPSEC packet");
+
+			char dst[64], src[64];
+			IPToStr(src, 64, &p->SrcIP);
+			IPToStr(dst, 64, &p->DstIP);
+
+			Dbg("received IPsec packet src: %s:%u dst: %s:%u of size %u", src, p->SrcPort, dst, p->DestPort, p->Size);
 			IPsecProcPacket(s, p);
 		}
 	}
