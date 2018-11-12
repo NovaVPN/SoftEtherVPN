@@ -7,10 +7,11 @@
 // An UDP packet has been received via the IPsec tunnel
 void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, UCHAR *data, UINT data_size)
 {
-  UDP_HEADER *u;
-  UINT payload_size;
-  UINT src_port, dst_port;
-  UINT packet_length;
+  // Validate arguments
+  if (ike == NULL || c == NULL || data == NULL || data_size == 0)
+  {
+    return;
+  }
 
   if (data_size <= sizeof(UDP_HEADER))
   {
@@ -18,8 +19,12 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, U
     return;
   }
 
+  UINT payload_size;
+  UINT src_port, dst_port;
+  UINT packet_length;
+
   // UDP header
-  u = (UDP_HEADER *)data;
+  UDP_HEADER *u = (UDP_HEADER *)data;
 
   packet_length = Endian16(u->PacketLength);
 
