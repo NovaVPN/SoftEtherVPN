@@ -1,8 +1,6 @@
 #ifndef IKEv2_H
 #define IKEv2_H
 
-#include <sys/time.h>
-
 #include "Cedar/CedarType.h"
 #include "Mayaqua/MayaType.h"
 
@@ -270,6 +268,4 @@ void Ikev2SendPacketByIPsecSa(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UCHAR *data,
 void Ikev2SendPacketByIPsecSaInner(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UCHAR *data, UINT data_size, UCHAR protocol_id);
 void Ikev2SendData(IKEv2_SERVER* s, IP* srcIP, UINT srcPort, IP* destIP, UINT destPort, UCHAR* data, UINT size, USHORT type);
 void Ikev2IPsecSendUdpPacket(IKEv2_SERVER *ike, IKEv2_IPSECSA *c, UINT src_port, UINT dst_port, UCHAR *data, UINT data_size);
-
-double cur_time_us();
 #endif // IKEv2_H

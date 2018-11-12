@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stddef.h>
+#include <sys/time.h>
 
 #include "Mayaqua/MayaType.h"
 
@@ -454,4 +455,5 @@ USHORT Ikev2GetNotificationErrorCode(USHORT notification_type);
 BUF * EndianBuf(BUF *b);
 void Endian(UCHAR *b, UCHAR *bb, UINT size);
 void DbgPointer(char* text, void* p, UINT size);
+double cur_time_us();
 #endif	// IPSEC_IKEv2_PACKET_H

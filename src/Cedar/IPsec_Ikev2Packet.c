@@ -999,3 +999,9 @@ void DbgPointer(char* text, void* p, UINT size) {
   }
   Debug("\n");
 }
+
+double cur_time_us() {
+	struct timeval us;
+	gettimeofday(&us, NULL);
+	return us.tv_sec * (int)1e6 + us.tv_usec;
+}

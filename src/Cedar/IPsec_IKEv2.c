@@ -4418,9 +4418,3 @@ IKEv2_IPSECSA* Ikev2FindIPSECSA(IKEv2_SERVER* ike, UINT SPI) {
 
   return NULL;
 }
-
-double cur_time_us() {
-  struct timeval us;
-  gettimeofday(&us, NULL);
-  return us.tv_sec * (int)1e6 + us.tv_usec;
-}
