@@ -48,7 +48,7 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, U
 
   UDPPACKET p;
   // A L2TP packet has been received
-  // IPsecIkeClientManageL2TPServer(ike, c);
+  IPsecIkeClientManageL2TPServer(ike, c);
 
   // Update Port number
   // c->L2TPClientPort = src_port;
@@ -65,7 +65,6 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, U
 
   ProcL2TPPacketRecv(c->L2TP, &p);
 
-  IPsecIkeSendUdpForDebug(dst_port, 1, p.Data, p.Size);
 //	{ //какая то тупая заглушка
 //		void* content = Malloc(payload_size);
 //		Copy(content, data + sizeof(UDP_HEADER), payload_size);
@@ -742,6 +741,8 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
         //	// A L2TPv3 packet has been received
         //	ProcL2TPv3PacketRecv(ike, c, pkt->IPv4PayloadData, pkt->IPv4PayloadSize, true);
         //}
+      default:
+        Dbg("decoded unknown protocol from ESP: %d", pkt->L3.IPv4Header->Protocol);
     }
     FreePacket(pkt);
   }
