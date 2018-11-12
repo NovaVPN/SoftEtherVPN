@@ -49,34 +49,28 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, U
 
   src_port = Endian16(u->SrcPort);
   dst_port = Endian16(u->DstPort);
-  Dbg("UDP: dst port = %u", dst_port);
+  Dbg("src_port %u, dst_port %u, l2tp port is %u", src_port, dst_port, IPSEC_PORT_L2TP);
 
   UDPPACKET p;
   // A L2TP packet has been received
-  IPsecIkeClientManageL2TPServer(ike, c);
+  Ikev2ClientManageL2TPServer(ike->ike_server, c);
 
   // Update Port number
-  // c->L2TPClientPort = src_port;
+  c->L2TPClientPort = src_port;
 
   // Pass the received packet to the L2TP server
   p.Type = 0;
   p.Data = data + sizeof(UDP_HEADER);
   p.DestPort = IPSEC_PORT_L2TP;
-  p.SrcPort = IPSEC_PORT_L2TP;
+  Copy(&p.DstIP, &c->L2TPServerIP, sizeof(IP));
   p.Size = payload_size;
-
-  Copy(&p.DstIP, &c->server_ip, sizeof(IP));
-  Copy(&p.SrcIP, &c->client_ip, sizeof(IP));
+  Copy(&p.SrcIP, &c->L2TPClientIP, sizeof(IP));
+  p.SrcPort = IPSEC_PORT_L2TP;
 
   ProcL2TPPacketRecv(c->L2TP, &p);
-
-//	{ //какая то тупая заглушка
-//		void* content = Malloc(payload_size);
-//		Copy(content, data + sizeof(UDP_HEADER), payload_size);
-//		UDPPACKET* p = NewUdpPacket(&pkt->L3.IPv4Header->SrcIP, 6969, &pkt->L3.IPv4Header->DstIP, dst_port, content, payload_size);
-//		Add(ike->SendPacketList, p);
-//	}
+  Dbg("sending IPsec (ikev2) UDP dst: %u src: %u %u of size %u", dst_port, src_port, p.Size);
 }
+
 
 void Ikev2GetNotifications(IKEv2_NOTIFY_CONTAINER* c, LIST* payloads) {
   if (c == NULL || payloads == NULL) {
@@ -133,8 +127,40 @@ void Ikev2GetNotifications(IKEv2_NOTIFY_CONTAINER* c, LIST* payloads) {
   ReleaseList(allNtf);
 }
 
+// Received the L2TPv3 packet via the IPsec tunnel
+void Ikev2ProcL2TPv3PacketRecv(IKE_SERVER *ike, IKEv2_CLIENT *c, UCHAR *data, UINT data_size, bool is_tunnel_mode) {
+  // Validate arguments
+  if (ike == NULL || c == NULL || data == NULL || data_size == 0)
+    return;
+
+  UDPPACKET p;
+  c->IsL2TPOnIPsecTunnelMode = is_tunnel_mode;
+
+  Ikev2ClientManageL2TPServer(ike, c);
+
+  // Pass the received packet to the L2TP server
+  p.Type = 0;
+  p.Data = data;
+  p.DestPort = IPSEC_PORT_L2TPV3_VIRTUAL;
+  p.Size = data_size;
+
+  if (is_tunnel_mode)
+  {
+    Copy(&p.DstIP, &c->tunnelServerIP, sizeof(IP));
+    Copy(&p.SrcIP, &c->tunnelClientIP, sizeof(IP));
+  }
+  else
+  {
+    Copy(&p.DstIP, &c->L2TPServerIP, sizeof(IP));
+    Copy(&p.SrcIP, &c->L2TPClientIP, sizeof(IP));
+  }
+  p.SrcPort = IPSEC_PORT_L2TPV3_VIRTUAL;
+
+  ProcL2TPPacketRecv(c->L2TP, &p);
+}
+
 // Manage the L2TP server that is associated with the IKE_CLIENT
-void Ikev2ClientManageL2TPServer(IKEv2_SERVER *ike, IKE_CLIENT *c) {
+void Ikev2ClientManageL2TPServer(IKE_SERVER *ike, IKEv2_CLIENT *c) {
   if (ike == NULL || c == NULL) {
     return;
   }
@@ -146,11 +172,11 @@ void Ikev2ClientManageL2TPServer(IKEv2_SERVER *ike, IKE_CLIENT *c) {
       crypt_block_size = c->CurrentIpSecSaRecv->TransformSetting.Crypto->BlockSize;
     }
 
-    c->L2TP = NewL2TPServerEx(ike->ike_server->Cedar, ike, false, crypt_block_size);
+    c->L2TP = NewL2TPServerEx(ike->Cedar, ike, false, crypt_block_size);
     c->L2TP->IkeClient = c;
 
-    Copy(&c->L2TPServerIP, &c->ServerIP, sizeof(IP));
-    Copy(&c->L2TPClientIP, &c->ClientIP, sizeof(IP));
+    Copy(&c->L2TPServerIP, &c->server_ip, sizeof(IP));
+    Copy(&c->L2TPClientIP, &c->client_ip, sizeof(IP));
 
     if (c->CurrentIpSecSaRecv != NULL) {
       Format(c->L2TP->CryptName, sizeof(c->L2TP->CryptName),
@@ -159,21 +185,19 @@ void Ikev2ClientManageL2TPServer(IKEv2_SERVER *ike, IKE_CLIENT *c) {
              c->CurrentIpSecSaRecv->TransformSetting.CryptoKeySize * 8);
     }
 
-    Debug("IKE_CLIENT 0x%X: L2TP Server Started.\n", c);
-
-    IPsecLog(ike, c, NULL, NULL, "LI_L2TP_SERVER_STARTED");
+    Dbg("[IKEv2] L2TP server started");
   }
 
   L2TP_SERVER* l2tp = c->L2TP;
   if (l2tp->Interrupts == NULL) {
-    l2tp->Interrupts = ike->ike_server->Interrupts;
+    l2tp->Interrupts = ike->Interrupts;
   }
 
   if (l2tp->SockEvent == NULL) {
-    SetL2TPServerSockEvent(l2tp, ike->ike_server->SockEvent);
+    SetL2TPServerSockEvent(l2tp, ike->SockEvent);
   }
 
-  l2tp->Now = ike->ike_server->Now;
+  l2tp->Now = ike->Now;
 }
 
 /* IKEv2 SERVER INITIALIZATION STRUCTURES */
@@ -709,7 +733,6 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
 //    }
 
     Dbg("ipv4 offset is 0, continue");
-
 //    if ((IPV4_GET_FLAGS(pkt->L3.IPv4Header) & 0x01) != 0) {
 //      Dbg("bad IPv4 flags provided, exit");
 //      FreePacket(pkt);
@@ -722,11 +745,11 @@ void ProcessIKEv2ESP(IKEv2_SERVER *ike, UDPPACKET *p, UINT spi, IKEv2_IPSECSA* i
         Dbg("decoded from ESP: UDP");
 
         Ikev2ProcIPsecUdpPacketRecv(ike, c, pkt, pkt->IPv4PayloadData, pkt->IPv4PayloadSize);
-        IKEv2_IPSECSA* sa = LIST_DATA(ike->ipsec_SAs, 0);
-
-        sa->client->server_port = 500;
-        sa->client->client_port = 4500;
-        Ikev2IPsecSendUdpPacket(ike, sa, sa->client->server_port, sa->client->client_port, pkt->IPv4PayloadData, pkt->IPv4PayloadSize);
+//        IKEv2_IPSECSA* sa = LIST_DATA(ike->ipsec_SAs, 0);
+//
+//        sa->client->server_port = 500;
+//        sa->client->client_port = 4500;
+//        Ikev2IPsecSendUdpPacket(ike, sa, sa->client->server_port, sa->client->client_port, pkt->IPv4PayloadData, pkt->IPv4PayloadSize);
         break;
       case IPSEC_IP_PROTO_ETHERIP:
         Dbg("decoded from ESP: EtherIP");

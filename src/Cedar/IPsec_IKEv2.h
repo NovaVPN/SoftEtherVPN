@@ -102,6 +102,19 @@ typedef struct IKEv2_CLIENT {
   UINT L2TPClientPort;          // Client-side port number of L2TP
   IP L2TPServerIP, L2TPClientIP;// IP address used by the L2TP processing
   bool IsL2TPOnIPsecTunnelMode; // Whether the L2TP is working on IPsec tunnel mode
+  IKE_SA  *CurrentIkeSa;				// IKE SA to be used currently
+  IPSECSA *CurrentIpSecSaRecv;	// IPsec SA to be used currently (receive direction)
+  IPSECSA *CurrentIpSecSaSend;	// IPsec SA to be currently in use (transmit direction)
+//
+//  IPSEC_SA_TRANSFORM_SETTING CachedTransformSetting;	// Cached transform attribute value
+//  UINT64 CurrentExpiresSoftTick_StoC;			// The maximum value of the flexible expiration date of the current (server -> client)
+//  UINT64 CurrentExpiresSoftTick_CtoS;			// The maximum value of the flexible expiration date of the current (client -> server)
+//  UINT CurrentNumEstablishedIPsecSA_StoC;		// The number of IPsec SA currently active (server -> client)
+//  UINT CurrentNumEstablishedIPsecSA_CtoS;		// The number of IPsec SA currently active (client -> server)
+//  UINT CurrentNumHealtyIPsecSA_CtoS;			// The number of currently available IPsec SA which expiration well within (client -> server)
+//  UINT CurrentNumHealtyIPsecSA_StoC;			// The number of currently available IPsec SA which expiration well within (server -> client)
+//  bool SendID1andID2;							// Whether to send the ID in QM
+
 } IKEv2_CLIENT;
 
 typedef struct IKEv2_SA {
@@ -178,7 +191,7 @@ IKEv2_CLIENT* NewIkev2Client(IP* clientIP, UINT clientPort, IP* serverIP, UINT s
 IKEv2_SA* Ikev2CreateSA(UINT64 SPIi, UINT64 SPIr, IKEv2_CRYPTO_SETTING* setting, IKEv2_CRYPTO_KEY_DATA* key_data);
 IKEv2_IPSECSA* Ikev2CreateIPsecSA(UINT SPI, IKEv2_SA* parent_IKESA, IKEv2_CRYPTO_KEY_DATA* key_data, IKEv2_CRYPTO_SETTING* setting);
 
-void Ikev2ClientManageL2TPServer(IKEv2_SERVER *ike, IKE_CLIENT *c);
+void Ikev2ClientManageL2TPServer(IKE_SERVER *ike, IKEv2_CLIENT *c);
 
 void Ikev2FreeServer(IKEv2_SERVER* server); // global
 void Ikev2FreeIKESA(IKEv2_SA* sa);
@@ -199,6 +212,7 @@ void Ikev2FreeIPSECSA(IKEv2_IPSECSA* sa);
 void Ikev2FreeClient(IKEv2_CLIENT* c);
 
 //int Ikev2ProcessInformatonalPacket(IKEv2_PACKET *header);
+void Ikev2ProcL2TPv3PacketRecv(IKE_SERVER *ike, IKEv2_CLIENT *c, UCHAR *data, UINT data_size, bool is_tunnel_mode);
 
 UINT64 Ikev2CreateSPI(IKEv2_SERVER* ike);
 BUF* Ikev2GenerateNonce(UCHAR key_size);
