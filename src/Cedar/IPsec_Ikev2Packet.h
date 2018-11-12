@@ -1,18 +1,16 @@
 #ifndef	IPSEC_IKEv2_PACKET_H
 #define	IPSEC_IKEv2_PACKET_H
 
-#ifndef __DEBUG_SHORTEN_MACROS__
-#define __DEBUG_SHORTEN_MACROS__
-#endif
-
 #include <stdio.h>
 #include <stddef.h>
-#include <time.h>"
 
 #include "Mayaqua/MayaType.h"
 
-#define Dbg(text, ...) Debug("[%s %s][%u] %s:%u %s " text "\n", __DATE__, __TIME__, (unsigned long) time(NULL), __FILE__, __LINE__, __func__, ##__VA_ARGS__)
+#ifndef __DEBUG_SHORTEN_MACROS__
+#define __DEBUG_SHORTEN_MACROS__
+#define Dbg(text, ...) Debug("[%.0f] %s:%u %s " text "\n", cur_time_us(), __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 #define DbgBuf(text, buf) DbgPointer(text, buf->Buf, buf->Size)
+#endif // __DEBUG_SHORTEN_MACROS__
 
 // This error code returned when malloc/calloc/realloc fails
 #define IKEv2_OUT_OF_MEMORY 69

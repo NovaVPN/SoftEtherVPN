@@ -1,17 +1,14 @@
 #ifndef IKEv2_H
 #define IKEv2_H
+
+#include <sys/time.h>
+
 #include "Cedar/CedarType.h"
 #include "Mayaqua/MayaType.h"
 
 #include "IPsec_IKE.h"
 #include "IPsec_IkePacket.h"
 #include "IPsec_Ikev2Packet.h"
-
-#ifndef __DEBUG_SHORTEN_MACROS__
-#define __DEBUG_SHORTEN_MACROS__
-#define Dbg(text, ...) Debug("%s:%u %s " text "\n", __FILE__, __LINE__, __func__, ##__VA_ARGS__)
-#define DbgBuf(text, buf) DbgPointer(text, buf->Buf, buf->Size)
-#endif
 
 #ifndef min
 # define min(a, b) (((a) > (b)) ? (b) : (a))
@@ -273,4 +270,6 @@ void Ikev2SendPacketByIPsecSa(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UCHAR *data,
 void Ikev2SendPacketByIPsecSaInner(IKEv2_SERVER *ike, IKEv2_IPSECSA *sa, UCHAR *data, UINT data_size, UCHAR protocol_id);
 void Ikev2SendData(IKEv2_SERVER* s, IP* srcIP, UINT srcPort, IP* destIP, UINT destPort, UCHAR* data, UINT size, USHORT type);
 void Ikev2IPsecSendUdpPacket(IKEv2_SERVER *ike, IKEv2_IPSECSA *c, UINT src_port, UINT dst_port, UCHAR *data, UINT data_size);
+
+double cur_time_us();
 #endif // IKEv2_H
