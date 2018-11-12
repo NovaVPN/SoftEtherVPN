@@ -49,7 +49,6 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, U
 
   src_port = Endian16(u->SrcPort);
   dst_port = Endian16(u->DstPort);
-  Dbg("src_port %u, dst_port %u, l2tp port is %u", src_port, dst_port, IPSEC_PORT_L2TP);
 
   UDPPACKET p;
   // A L2TP packet has been received
@@ -67,7 +66,7 @@ void Ikev2ProcIPsecUdpPacketRecv(IKEv2_SERVER *ike, IKEv2_CLIENT *c, PKT* pkt, U
   Copy(&p.SrcIP, &c->L2TPClientIP, sizeof(IP));
   p.SrcPort = IPSEC_PORT_L2TP;
 
-  Dbg("sending IPsec (ikev2) UDP dst: %u src: %u of size %u", dst_port, src_port, p.Size);
+  Dbg("[IKEv2] sending IPsec UDP src: %u dst: %u of size %u", src_port, dst_port, p.Size);
   ProcL2TPPacketRecv(c->L2TP, &p);
 }
 

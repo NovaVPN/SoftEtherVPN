@@ -1653,10 +1653,12 @@ void ProcL2TPPacketRecv(L2TP_SERVER *l2tp, UDPPACKET *p)
 		return;
 	}
 
+	Debug("prasing l2tp packet\n");
 	// Parse a packet.
 	pp = ParseL2TPPacket(p);
 	if (pp == NULL)
 	{
+		Debug("can't prase l2tp packet\n");
 		return;
 	}
 
@@ -1963,6 +1965,7 @@ void ProcL2TPPacketRecv(L2TP_SERVER *l2tp, UDPPACKET *p)
 		}
 	}
 
+	Debug("l2tp wtf ended\n");
 	if (no_free == false)
 	{
 		FreeL2TPPacket(pp);
