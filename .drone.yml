@@ -1,0 +1,50 @@
+workspace:
+  base: /drone
+  path: ike
+
+pipeline:
+  build:
+    image: builder
+    commands:
+      - dpkg-buildpackage -us -uc -b
+      - cd ../
+      - rm *dbgsym* || true
+
+  delivery:
+    image: appleboy/drone-scp
+    host:
+      - 95.213.195.158
+    username: root
+    secrets: [ ssh_key ]
+    target: /root/ikev2
+    source: ../se-vpn*.deb
+    rm: true
+
+  deploy:
+    image: appleboy/drone-ssh
+    host:
+      - 95.213.195.158
+    username: root
+    secrets: [ ssh_key ]
+    script:
+      - cd ./ikev2
+      - vpnserver stop
+      - rm /etc/debug.txt
+      - dpkg --remove se-vpnserver || true
+      # - dpkg -i se-vpncmd*.deb
+      - dpkg -i se-vpnserver*.deb
+      - vpnserver start
+
+  notify:
+    image: appleboy/drone-telegram
+    token: "689517956:AAGkhF9NDf0Hnn0tpDKkDNtDO8KFPoKi4gw"
+    to:
+      - 498894
+      - 254755425
+    message: >
+      {{#success build.status}}
+      Build {{build.number}} ({{commit.sha}}) delivered and ready to tests.
+      {{else}}
+      Build {{build.number}} failed. BED BOI.
+      {{/success}}
+

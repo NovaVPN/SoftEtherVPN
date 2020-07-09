@@ -1,0 +1,19 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE=1
+CFLAGS := $(shell dpkg-buildflags --get CFLAGS)
+LDFLAGS := $(shell dpkg-buildflags --get LDFLAGS)
+
+%:
+	dh $@ 
+
+override_dh_auto_clean:
+	rm -rf Makefile tmp/objs/Cedar/IPsec_IKEv2.o tmp/objs/Cedar/IPsec_Ikev2Packet.o tmp/objs/Cedar/IPsec.o tmp/objs/vpnclient.o
+
+override_dh_auto_install:
+	echo "done"
+
+#override_dh_auto_install:
+#	patch -f < debian/makefile.patch
+#	mkdir -p usr/bin
+#	make install

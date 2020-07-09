@@ -1,0 +1,4 @@
+#!/usr/bin/dh-exec
+src/hamcorebuilder/hamcore.se2 => /usr/bin/hamcore.se2
+bin/vpnserver/vpnserver => /usr/bin/vpnserver
+#bin/vpnserver/vpnserver.config => /etc/vpnserver/vpnserver.config

@@ -1,0 +1,19 @@
+Source: se-vpn
+Section: net
+Priority: optional
+Maintainer: Dmitry Orlov <me@mosquito.su>
+Build-Depends: debhelper (>= 7.0.50~), libncurses-dev, linux-libc-dev, libssl-dev (>= 1.0~), libreadline-dev (>= 6.0~), build-essential, dh-exec
+Standards-Version: 3.9.1
+Homepage: http://www.softether.org/
+
+Package: se-vpncmd
+Architecture: amd64
+Depends: ${misc:Depends}, ${shlibs:Depends}
+Section: net
+Description: Command line utils
+
+Package: se-vpnserver
+Architecture: amd64
+Depends: ${misc:Depends}, ${shlibs:Depends}, se-vpncmd
+Section: net
+Description: VPN Server daemon

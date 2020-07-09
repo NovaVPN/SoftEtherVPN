@@ -1,0 +1,5 @@
+#!/bin/sh
+
+cp src/makefiles/linux_64bit.mak Makefile
+
+echo "Done. Run 'make' to build SoftEther VPN."

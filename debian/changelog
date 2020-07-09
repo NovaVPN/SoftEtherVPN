@@ -1,0 +1,5 @@
+se-vpn (0:1.1) unstable; urgency=low
+
+  * debian package building revisisted
+
+ -- Artem <>  Sun, 15 Jul 2018 13:41:00 +0000
